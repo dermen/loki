@@ -98,15 +98,14 @@ class RingFit:
         return lsc_out.beta
 
 class InterpSimple:
-    def __init__ ( self,  a,b, qmax,qmin, nphi, raw_img_shape, bin_fac=None ) : 
+    def __init__ ( self,  a,b, qmax,qmin, nphi, raw_img_shape ) : 
         '''
         Define a polar image with dimensions: (qmax-qmin) x nphi
         ==========================================================
         a,b           - float, x_center,y_center of cartesian image tht is being interpolated
-        qmin,qmax     - cartesianimage will be interpolated from q-qmin, q + qmax
+        qmin,qmax     - cartesianimage will be interpolated from qmin to qmax in pixel units
         nphi          - int, azimuthal dimension of polar image (number of azimuthal points along polar image)
         raw_img_shape - int tuple, ydim, xdim of the raw image 
-        bin_fac       - float, reduce the size of the cartesian image by this amount
 
         '''
         self.a = a        # x center
@@ -116,17 +115,10 @@ class InterpSimple:
         self.raw_shape = raw_img_shape   
         self.phis_ring     = arange( nphi ) * 2 * pi / nphi
         self.num_phis_ring = nphi
-
-        self.bin_fac = bin_fac
         
-        if bin_fac:
-            self.Y,self.X = zoom( np.random.random(raw_img_shape) , # tmp random image
-                                    1. / bin_fac, order=1 ).shape 
-        else: 
-            self.X = raw_img_shape[1] # fast dimension
-            self.Y = raw_img_shape[0] # slow dimension
+        self.X = raw_img_shape[1] # fast dimension
+        self.Y = raw_img_shape[0] # slow dimension
 
-        
         self.Q   = vstack( [ ones(self.num_phis_ring)*iq for iq in arange( self.qmin,self.qmax ) ] )
         self.PHI = vstack( [ self.phis_ring for iq in arange( self.qmin,  self.qmax ) ] )
         self.xring = self.Q*cos(self.PHI-pi) + self.a
