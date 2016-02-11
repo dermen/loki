@@ -118,7 +118,7 @@ class MakeDatabase:
         # for comparing exposures
         self.all_chebyfit_compare = [] 
        
-    def Make(self, save_name, pk_fit_extent=20, pk_fit_width=10,
+    def Make(self, save_name, pdeg=15, pk_fit_extent=20, pk_fit_width=10,
                 remove_spots=True, spot_thresh=2, spot_extent=10):
         """ 
         make the database and save as a pandas pickle
@@ -132,7 +132,7 @@ class MakeDatabase:
                     angular profile I(phi). in units of median[I(phi)]
         'spot_extent' the width of the spot to remove in pixel units
         """
-        
+        self.pdeg = pdeg
         self.pk_fit_extent = pk_fit_extent
         self.pk_fit_width = pk_fit_width
         self.remove_spots = remove_spots
@@ -155,7 +155,7 @@ class MakeDatabase:
         nshots = self.pd.shape[0]
         for shot_ind,shot in enumerate(self.pd):
             print "%sParameterizing exposures ( %d/%d )"%(log_ret,
-                                            shot_ind,nshots)
+                                            shot_ind+1,nshots)
 
             self.all_shot_index.append(shot_ind)
             self.all_shot_tag.append(self.inds_tags[shot_ind])
@@ -268,7 +268,8 @@ class MakeDatabase:
         # interpolate the angular profile from the polar image
         norm, ring, mask = helper.get_ring(
                     pdata=self.shot_ma.data, 
-                    pmask=self.pmask, 
+                    pmask=self.pmask,
+                    rm_peaks=False, 
                     iq=self.pk_pos)
         
         if self.remove_spots:
@@ -276,7 +277,7 @@ class MakeDatabase:
             ofit_tmp, _ , _ = helper.fit_periodic(
                                     ring.copy(), 
                                     mask.copy(), 
-                                    deg=15)
+                                    deg=self.pdeg)
             
             # remove large bragg spots from the ring profile
             # this function uses the ofit_tmp to subtract a
@@ -285,9 +286,9 @@ class MakeDatabase:
             ring, mask,_ = helper.remove_peaks( 
                                     ring, 
                                     mask, 
-                                    thick=10, 
+                                    thick=self.spot_extent, 
                                     coef=ofit_tmp, 
-                                    peak_thresh=2)
+                                    peak_thresh=self.spot_thresh)
         
         # fit a new polynomial to the ring
         # these will be used for pk removal prior to
@@ -295,7 +296,7 @@ class MakeDatabase:
         ofit_pk_rm , _,_ = helper.fit_periodic(
                                 ring, 
                                 mask, 
-                                deg=15)
+                                deg=self.pdeg)
         
         # fit a polynomial to the normalized ring 
         # These will be used to compare exposures
@@ -303,7 +304,7 @@ class MakeDatabase:
         ofit_compare, _ , _ = helper.fit_periodic(
                                 ring/norm, 
                                 mask, 
-                                deg=15)
+                                deg=self.pdeg)
         
         # store the polynomial coefficients
         self.all_chebyfit_pkremove.append(ofit_pk_rm.tolist())
