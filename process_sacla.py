@@ -3,22 +3,132 @@ import h5py
 import json
 from RingData import InterpSimple, DiffCorr
 
-from pylab import show,imshow
+from pylab import plot,show,imshow
 
-def generate_sacla_images( runfile , runnumber, num_dark=0):
+#####################################################
+# A GROUP OF HELPER FUNCTIONS FOR VARIOUS BEAMTIMES #
+#####################################################
+
+def radProPrepJune2015(wavelen=False, pixsize=False, detdist=False, num_q=2000):
+    """
+    wavelen,    float , the wavelength of the run in angstroms
+    pixsize,   float, the pixels size on the detector in meters
+    detdist,    float, the sample to detector distance in meters
+    num_q,     int, the minimum number of radial bins, dont change this 
+    """
+    mask    = np.load( '/home/fperakis/data/mpccd_basic_mask.npy')
+    center  = np.load( '/home/fperakis/data/center.npy')
+    
+    if not wavelen:
+        wavelen = 1.127   # ang
+    if not pixsize:
+        pixsize = 0.00005 # pixsize
+    if not detdist:
+        detdist = 0.0625  # detdist
+    
+    pix2invang  = lambda qpix : np.sin(np.arctan(qpix*pixsize/detdist )/2)*4*np.pi/wavelen
+    qs          = [ pix2invang( q )  for q in range(num_q) ]
+    return mask, center, qs 
+
+
+def radProPrepFeb2014( wavelen=False, pixsize=False, detdist=False, num_q =2000 ):
+    """
+    wavelen,    float , the wavelength of the run in angstroms
+    pixsize,   float, the pixels size on the detector in meters
+    detdist,    float, the sample to detector distance in meters
+    num_q,     int, the minimum number of radial bins, dont change this 
+    """
+    mask    = np.load( '/home/derek/data/mpccd_basic_mask.npy')
+    center  = np.load( '/home/derek/data/mpccd_center_Feb2014.npy')
+    
+    if not wavelen:
+        wavelen = 1.144   # ang
+    if not pixsize:
+        pixsize = 0.00005 # meter 
+    if not detdist:
+        detdist = 0.053  # meter
+    
+    pix2invang  = lambda qpix : np.sin(np.arctan(qpix*pixsize/detdist )/2)*4*np.pi/wavelen
+    qs          = [ pix2invang( q )  for q in range(num_q) ]
+    return mask, center, qs 
+
+
+def imagesFromTags( runfile ,  tagList):
     """
     runfile,   str, filename of the run hdf5
-    runnumber,  str, run number (e.g. '178884')
-    num_dark,    int, number of dark imgs in h5 file, should only be at the start of the file
+    tagList,    list str, list of run tags
     """
 
     fh5           = h5py.File( runfile )
-    imgs_path     = '/run_%s/detector_2d_assembled_1'%runnumber
-    exposure_tags =  fh5[ imgs_path].keys()[1+num_dark:] # fist key not a tag, then there might be some darks if its the start of the run
-    
-    img_gen       = (  fh5[ imgs_path + '/' + tag + '/detector_data' ].value for tag in exposure_tags )
-    return img_gen, exposure_tags
+    run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
+    imgs_path     = '/%s/detector_2d_assembled_1'%run_key
+    img_gen   = (  fh5[ imgs_path + '/' + tag + '/detector_data' ].value for tag in tagList )
+    return img_gen
 
+
+def getNorm( runfile, probe=True, pump=False, beam=True):
+    
+    fh5           = h5py.File( runfile )
+    run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
+
+    intens_monit = fh5['/%s/event_info/bl_3/oh_2/bm_2_pulse_energy_in_joule'%run_key].value
+
+    beam_stat     = fh5['/%s/event_info/acc/accelerator_status'%run_key].value.astype(bool)
+    pump_stat     = fh5['/%s/event_info/bl_3/lh_1/laser_pulse_selector_status'%run_key].value.astype(bool)
+    probe_stat    = fh5['/%s/event_info/bl_3/eh_1/xfel_pulse_selector_status'%run_key].value.astype(bool)
+    
+    intens_monit  = [ val for i,val in enumerate( intens_monit) if beam_stat[i] == beam and pump_stat[i] == pump and probe_stat[i] == probe ]
+
+    return np.sum( intens_monit)
+
+def selectImagesSimple(  runfile, shutter=1, beam=1 ):
+    """
+    Parameters
+    ==========
+    runfile,   str, filename of the run hdf5
+    shutter,   str, 1 for open or 0  for closed
+    beam       bool, 1 for beam up or 0 for beam down
+    """
+
+    fh5           = h5py.File( runfile )
+    run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
+    tags          = fh5['/%s/detector_2d_assembled_1'%run_key].keys()[1:]
+    beam_stat     = fh5['/%s/event_info/acc/accelerator_status'%run_key].value
+    shutt_stat    = fh5['/%s/event_info/bl_3/eh_1/xfel_pulse_selector_status'%run_key].value
+
+#   keep only the tags corresponding to status
+    tags     = [ tag for i,tag in enumerate( tags) if beam_stat[i] == beam and shutt_stat[i] == shutter ]
+    img_gen  = (  fh5['%s/detector_2d_assembled_1/%s/detector_data'%(run_key,tag) ].value for tag in tags )
+    return img_gen, tags
+
+def selectImages(  runfile, probe=True, pump=False, beam=True ):
+    """
+    Parameters
+    ==========
+    runfile,   str, filename of the run hdf5
+    probe,     bool, if xfel shutter is open or closed
+    pump,      bool, if laser shutter is open or closed
+    beam       bool, if xfel beam is on
+    """
+    fh5           = h5py.File( runfile )
+    run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
+    tags          = fh5['/%s/detector_2d_assembled_1'%run_key].keys()[1:]
+    beam_stat     = fh5['/%s/event_info/acc/accelerator_status'%run_key].value.astype(bool)
+    pump_stat     = fh5['/%s/event_info/bl_3/lh_1/laser_pulse_selector_status'%run_key].value.astype(bool)
+    probe_stat    = fh5['/%s/event_info/bl_3/eh_1/xfel_pulse_selector_status'%run_key].value.astype(bool)
+
+#   keep only the tags corresponding to status
+    tags         = [ tag for i,tag in enumerate( tags) if beam_stat[i] == beam and pump_stat[i] == pump and probe_stat[i] == probe ]
+    img_gen   = (  fh5['%s/detector_2d_assembled_1/%s/detector_data'%(run_key,tag) ].value for tag in tags )
+    num_im = len(tags)
+    return img_gen, num_im
+
+def aveImages(imggen, num_img):
+    im = imggen.next()
+    for im_next in imggen:
+        im += im_next
+    im /= num_img
+    return im
 
 def normalize_polar_images( imgs, mask_val = -1 ): 
     norms = np.ma.masked_equal( imgs, mask_val).mean(axis=2)
@@ -26,9 +136,7 @@ def normalize_polar_images( imgs, mask_val = -1 ):
     imgs[ imgs < 0 ] = mask_val
     return imgs
 
-
-def interpolate_run ( run_number, img_gen, tags, mask, x_center, y_center, qmin, qmax, pixsize, detdist, wavelen, nphi, prefix=None):
-    
+def interpolate_run ( img_gen, tags, mask, x_center, y_center, qmin, qmax, pixsize, detdist, wavelen, nphi, prefix):
     """
     run_number,  string rung number
     img_gen,     generator of 2d np.array float images, this should generate each image in a run
@@ -46,8 +154,6 @@ def interpolate_run ( run_number, img_gen, tags, mask, x_center, y_center, qmin,
 
     num_imgs = len(tags)
 
-    if not prefix:
-        prefix = run_number
     output_hdf = h5py.File(  prefix + '.hdf5', 'w' )
 
 #   some useful functions
@@ -58,7 +164,7 @@ def interpolate_run ( run_number, img_gen, tags, mask, x_center, y_center, qmin,
     qmax_pix = invang2pix ( qmax )
 
 #   Initialize the interpolater
-    interpolater  = InterpSimple( x_c, y_c, qmax_pix, qmin_pix, nphi, raw_img_shape = mask.shape )
+    interpolater  = InterpSimple( x_center, y_center, qmax_pix, qmin_pix, nphi, raw_img_shape = mask.shape )
 
 #   make a polar image mask
     pmask   = interpolater.nearest( mask , dtype=bool ).round()
@@ -95,9 +201,11 @@ def interpolate_run ( run_number, img_gen, tags, mask, x_center, y_center, qmin,
     output_hdf.create_dataset( 'q_mapping' ,    data = q_map )
 
 #   save
+    print ("saving data to file %s!"%(prefix + '.hdf5'))
     output_hdf.close()
 
 #   save the lookup-map
+    print( "saving data dictionary to file %s!"%(prefix + '.json') )
     dump_file = open( prefix + '.json', 'w')
     json.dump( tag_map, dump_file )
     dump_file.close()
@@ -105,93 +213,67 @@ def interpolate_run ( run_number, img_gen, tags, mask, x_center, y_center, qmin,
     return prefix + '.hdf5', prefix + '.json' # return the file names it created
 
 
-def correlate_polar_images( data_hdf_fname, tag_map_fname, tag_pairs_fname ):
-
+def correlate_polar_images( data_hdf_fname, tag_map_fname, outfile, tag_pairs_fname=None ):
     """
     data_hdf_fname,     string, hdf5 file name, hdf data file returned by interpolate_run 
     tag_map_fname,      sting, JSON file name,  tag map file returned by interpolate_run
+    outfile,            string, where to store the output
     tag_pairs_fname,    string, JSON file name, contains a list of exposure tag pairs,
                                                 and each pair will be loaded, and subtracted
     """
 
 #   load the polar data
-    data_hdf    = h5py.File( data_hdf_fname )
+    data_hdf = h5py.File( data_hdf_fname )
 
-    polar_data = data_hdf['normalized_polar_data']
-    q_map     = { i: val for i,val in data_hdf[ 'q_mapping'].value }
-    nphi    = data_hdf['num_phi'].value
-    nq      = len( q_map)
-
+    polar_data = data_hdf['normalized_polar_data'][:10] #.value
+    polar_mask = data_hdf['polar_mask'].value
+    q_map  = { i: val for i,val in data_hdf[ 'q_mapping'].value }
+    nphi = data_hdf['num_phi'].value
+    nq = len( q_map)
 
 ###############################
 #                             #
 #   PROCESS POLAR DATA HERE   #
 #                             # 
+    #norm = np.ma.masked_equal( polar_data*polar_mask,0).mean(1).mean(1)
+    #norm = norm[:,None,None] #expand dimensions
+    #polar_data = polar_data / norm
 ###############################
-
 
 #   load out map
     tag_map = json.load( open( tag_map_fname) )
 
-#   load the exposure tag pairs
-    tag_pairs = json.load( open( tag_pairs_fname ))
-
-    exposure_diffs = [] 
-    for i_, tags in enumerate( tag_pairs):
-        tagA, tagB = tags
-        try: indxA = tag_map[ tagA]
-        except KeyError: continue
-        try: indxB = tag_map[ tagB]
-        except KeyError: continue
-        shotA = polar_data[ indxA ]
-        shotB  = polar_data[ indxB]
-        exposure_diffs.append(    shotA - shotB  )
-    exposure_diffs = np.vstack( exosure_diffs ) 
-
+    if tag_pairs_fname is not None:
+#       load the exposure tag pairs
+        tag_pairs = json.load( open( tag_pairs_fname ))
+        exposure_diffs = [] 
+        for i_, tags in enumerate( tag_pairs):
+            tagA, tagB = tags
+            try: indxA = tag_map[ tagA]
+            except KeyError: continue
+            try: indxB = tag_map[ tagB]
+            except KeyError: continue
+            shotA = polar_data[ indxA ]
+            shotB  = polar_data[ indxB]
+            exposure_diffs.append( shotA - shotB )
+        exposure_diffs = np.vstack( exosure_diffs ) 
+        DC = DiffCorr( exposure_diffs ) 
+    else:
+        DC = DiffCorr( polar_data, pre_dif=False, delta_shot=2)
 #   take the autocorrelation of each pair
-    DC     = DiffCorr( exposure_diffs ) 
-    cor      = DC.autocorr()
+    cor = DC.autocorr(num_high=10)
 #################################
 #                               #
 #   PROCESS CORRELATIONS HERE   #
-#                               # 
+#                               #
 #################################
-
 #   take the mean over pairs
     cor_m = cor.mean(0)
 
-
-# USAGE
-##################
-# RUN PARAMETERS # 
-##################
-x_c, y_c     = 1199.0093935 ,  1197.28156522 # latest optimzation in pixel units
-qmin         = 2.1         # inverse angstroms
-qmax         =  2.9        # inverse angstrom
-pixsize      = 0.00005     # meter
-wavelen      = 1.44        #angstrom
-detdist       = 0.053      #meter
-nphi          = 5000       # azimuthal dimension of interpolated image (careful not to downsample, the code is not very smart!, keep at least single pixel precision at qmax) 
-run_number    = '178884'
-mask         = np.load( '/Users/mender/for_schengjun/mask.npy' )  
-
-img_gen, tags           = generate_sacla_images ( 'subset_178884.h5', run_number, num_dark=50 ) # only for this h5 file, not all h5 files will have these darks
-data_file, tag_map_file = interpolate_run( run_number, img_gen, tags,  mask, x_c, y_c, qmin, qmax, pixsize, detdist, wavelen, nphi )
-
-#####################################################
-# REPLACE THIS STEP      
-
-# generate simple tag par list for this run
-tag_list_file = '%s_tag_pairs.json'%run_number
-# simply correlated every other exposure, except for the first 50 exposures as they are background
-simple_map = zip( tags[50:-1], tags[51:] )
-dump_f = open( tag_list_file , 'w')
-json.dump( simple_map, dump_f )
-dump_f.close()  
-
-######################################################
-
-correlate_polar_images( data_file, tag_map_file,tag_list_file)
-
-
+    output_hdf = h5py.File( outfile, 'w')
+    #output_hdf.create_dataset( 'all_cor', data=cor)
+    output_hdf.create_dataset( 'ave_cor', data=cor_m)
+    if tag_pairs_fname is not None:
+        output_hdf.create_dataset( 'tag_pairs', data=tag_pairs)
+    output_hdf.close()
 
