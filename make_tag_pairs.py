@@ -77,9 +77,9 @@ class MakeTagPairs:
             "Will use the shot standard deviation filter..."
             self.df['signal'] = self.df.shot_stdev
         elif signal== 'snr':
-            print ("Will use signal to noise filter, be sure you used the",
-                    "pk_detect option when making the database or this",
-                    "will break")
+            print  "Will use signal to noise filter, be sure you used the",\
+                    "pk_detect option when making the database or this",\
+                    "will break"
             self.df['sig'] = self.df.pk_amp / self.df.background_offset
 
         if signal is not None:
@@ -132,6 +132,8 @@ class MakeTagPairs:
         self.poly_thresh = poly_thresh
 
         self.tag_pairs = []
+        self.pair_inds = []
+        self.eps_min = []
         if not self.fixed_qr:        
             print "Iterating over groups and pairing"
             self._iterate_groups() 
@@ -140,6 +142,8 @@ class MakeTagPairs:
             print "Pairing all remaining shots in database"
             self.df_g = self.df
             self._pair_group()
+        
+        self._find_min_pairs()
         self._save_tag_pairs()
 
     def _iterate_groups(self):
@@ -160,7 +164,7 @@ class MakeTagPairs:
         similarity of their respective polynomials
         """
         ngroup = len(self.df_g)
-        
+       
         # polynomial at lower resolution than the ring (it is smooth)
         Px = np.arange(self.nphi)[::self.phi_res]
         Py = np.vstack( [np.polynomial.chebyshev.chebval(Px,c) 
@@ -181,36 +185,68 @@ class MakeTagPairs:
         outliers = is_outlier(eps.min(1),thresh=self.poly_thresh)
 
         # pair each shot with the shot that gives minimum eps
-        pair_inds = np.array([ (i,eps[i].argmin()) 
-                        for i in xrange(eps.shape[0]) 
-                        if not outliers[i] ])
-
-        # check whether a tag index appears multiple times
-        occurance = collections.Counter(pair_inds[:,1])
-        tags = self.df_g.tag.values
         
-        # save tag pairs
-        self.tag_pairs += [ (tags[i1], tags[i2]) for i1,i2 in pair_inds
-                            if occurance[i2] <= 1]
-
+        #df_g stores the global indices in the database
+        global_inds = self.df_g.index.values
+        for i in xrange( eps.shape[0] ):
+            j = eps[i].argmin()
+            if not outliers[i]:
+                pair = global_inds[ [i,j] ]
+                self.pair_inds.append( pair)
+                self.eps_min.append( eps[i,j]  )
+        
+    def _find_min_pairs(self):
+        """ 
+        Sometimes an exposure is paired used more than once
+        and we would like to find the minimum pair 
+        with that exposure. This function does just this.
+        """
+        # all pairs based on polynomial minimization
+        self.pair_inds = array(self.pair_inds)
+        # corresponding minimum pairing istance measure (e.g. min chai square)
+        self.eps_min = array(self.eps_min)
+        
+        # count how many times each index occurs
+        count_inds = Counter( self.pair_inds.flatten() )
+        
+        # looks for inds that occur more than once
+        for ind,count in count_inds.iteritems():
+            where_ind = np.any( self.pair_inds==ind,axis=1)
+            if count >1:
+#               pair where repeated index shows up
+#               find relative index of minimum pair
+                relative_i_min = self.eps_min[ where_ind].argmin()
+                tag_pair_inds = self.pair_inds[ where_ind][relative_i_min]
+            else: # count is 1
+                tag_pair_inds = self.pair_inds[where_ind][0]
+            
+            tag_pair = map( str, self.df.tag[ tag_pair_inds])
+            if not np.any( [ t in self.tag_pairs for t in tag_pair]):
+                self.tag_pairs.extend( tag_pair)
+        self.tag_pairs = zip( self.tag_pairs[::2], self.tag_pairs[1::2] )
+     
     def _save_tag_pairs(self):
         """
         saves the tag pairings list in a json file
         """
+        print "Made %d tag pairings..."%len(self.tag_pairs)
         outfile_ = open( self.outfile, 'w')
         json.dump( self.tag_pairs, outfile_)
         outfile_.close()
-        print "Saved tag pairing output in json file: %s"%self.outfile
-
+        print "Saved tag pairings in json file: %s"%self.outfile
 
 if __name__ == '__main__':
     db_pickle = '/data/work/mender/interped_178802.pkl'
-    qrmin = 20 
-    qrmax = 60
-    nphi = 5000 # nphi points from 0-2PI in polar image
+    qrmin = 20 # min q radius relative to qmin (pixel units)
+    qrmax = 60 # max q ..                  
+    nphi = 5000 # nphi is number of points from 0-2PI in polar image
     makeTagPairs = MakeTagPairs(db_pickle,nphi, qrmin=qrmin, qrmax=qrmax,
                         signal='snr', min_signal=0.2)
-   
+
     outf = '/data/work/mender/loki/interped_178802_pairs.json'
     makeTagPairs.Make(outf)
+        
+    # for DNA data try:
+    #makeTagPairs = MakeTagPairs(db_pickle, nphi, fixed_qr=True )
+    #makeTagPairs.Make(outf)
 
