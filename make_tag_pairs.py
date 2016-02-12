@@ -72,10 +72,10 @@ class MakeTagPairs:
 #       whether to apply a secondary signal threshhold
         if signal=='mean':
             "Will use the shot mean filter..."
-            self.df['signal'] = self.df.shot_mean 
+            self.df['sig'] = self.df.shot_mean 
         elif signal == 'stdev':
             "Will use the shot standard deviation filter..."
-            self.df['signal'] = self.df.shot_stdev
+            self.df['sig'] = self.df.shot_stdev
         elif signal== 'snr':
             print  "Will use signal to noise filter, be sure you used the",\
                     "pk_detect option when making the database or this",\
