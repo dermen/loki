@@ -7,7 +7,6 @@ import numpy as np
 
 from postproc_helper import is_outlier
 
-
 class MakeTagPairs:
     def __init__(self, db_pickle, nphi, fixed_qr=False, qrmin=None, 
                     qrmax=None, dqr=1, phi_res=10, rm_mean_outliers=True,
@@ -202,12 +201,12 @@ class MakeTagPairs:
         with that exposure. This function does just this.
         """
         # all pairs based on polynomial minimization
-        self.pair_inds = array(self.pair_inds)
+        self.pair_inds = np.array(self.pair_inds)
         # corresponding minimum pairing istance measure (e.g. min chai square)
-        self.eps_min = array(self.eps_min)
+        self.eps_min = np.array(self.eps_min)
         
         # count how many times each index occurs
-        count_inds = Counter( self.pair_inds.flatten() )
+        count_inds = collections.Counter( self.pair_inds.flatten() )
         
         # looks for inds that occur more than once
         for ind,count in count_inds.iteritems():

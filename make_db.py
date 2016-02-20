@@ -51,8 +51,8 @@ class MakeDatabase:
         self.pk_detect = pk_detect
         if not self.pk_detect:
             assert(pk_pos is not None)
-            print "will not detect peaks, instead will use %d as\
-                    relative peak position."%pk_pos
+            print "will not detect peaks, instead will use %d as"%pk_pos,\
+                    "relative peak position."
         else:
             print "Will be using peak detection..."
         self._load_data_file()
