@@ -163,7 +163,8 @@ class CorTagPairs:
         else:
             print "Will use pk_pos to estimate angular profile..." 
 
-        self.dif_imgs = np.zeros( (self.npairs, self.nq, self.nphi, 2 ) )
+        n = len( np.arange( -del_q, del_q+1))
+        self.dif_imgs = np.zeros( (self.npairs, n, self.nphi, 2 ) )
         overflow_inds = []
         for i,tags in enumerate(self.tag_pairs):
             print '%sMaking differencing pair %d/%d'%(log_ret,i,self.npairs)
@@ -215,9 +216,9 @@ class CorTagPairs:
             else:
                 masked = mask1*mask2
 #           
-            peak_mask = np.vstack( [masked for _ in xrange(self.nq) ] )
-            ring1 = self.pd[r1] * peak_mask*self.pmask[r1]
-            ring2 = self.pd[r2]  * peak_mask*self.pmask[r2]
+            peak_mask = np.vstack( [masked for _ in r1 ] )
+            ring1 = self.pd[i1,r1] * peak_mask*self.pmask[r1]
+            ring2 = self.pd[i2,r2]  * peak_mask*self.pmask[r2]
 
             if norm:
                 med1 = np.mean( ring1[ ring1 > 0 ] )
