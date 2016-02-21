@@ -149,11 +149,102 @@ class CorTagPairs:
         self.dif_imgs = np.delete(self.dif_imgs, 
                             overflow_inds, axis=0)
 
+
+    def make_dif_imgs2D(self, fixed_q, norm=True, del_q=2, iq=None,
+                rm_spots=True, spot_thick=None, spot_thresh=2.5):
+        print("TESTING...")
+        print "Making difference angular profiles..." 
+        if fixed_q:
+            print "Will use a fixed q..."
+            assert (iq is not None)
+            overbounds1 = iq+del_q+1 >= self.nq 
+            overbounds2 = iq-del_q < 0
+            assert( not (overbounds1) and not (overbounds2) )
+        else:
+            print "Will use pk_pos to estimate angular profile..." 
+
+        self.dif_imgs = np.zeros( (self.npairs, self.nq, self.nphi, 2 ) )
+        overflow_inds = []
+        for i,tags in enumerate(self.tag_pairs):
+            print '%sMaking differencing pair %d/%d'%(log_ret,i,self.npairs)
+            
+            t1,t2 = tags
+            i1,i2 = self.tag_map[t1], self.tag_map[t2]
+           
+            if fixed_q:
+                iq1 = iq
+                iq2 = iq
+            else:
+                iq1 = self.df.loc[ self.df.tag==t1, 'pk_pos'].values[0]
+                iq2 = self.df.loc[ self.df.tag==t2, 'pk_pos'].values[0]
+                # overflow conditions
+                over1 =iq1+del_q+1 >= self.nq 
+                over2 =iq2+del_q+1 >= self.nq
+                over3 =iq1-del_q < 0
+                over4 =iq2-del_q < 0
+                if any( (over1, over2, over3, over4)):
+                    overflow_inds.append(i)
+                    continue
+            
+                 
+            coef1 = self.df.loc[ self.df.tag==t1, \
+                                'cheby_fit_pkremove'].values[0]
+            coef2 = self.df.loc[ self.df.tag==t2, \
+                                'cheby_fit_pkremove'].values[0]
+
+            r1 = range( iq1-del_q, iq1+del_q+1)
+            r2 = range( iq2-del_q, iq2+del_q+1)
+
+            mask1 = np.floor( self.pmask[r1].mean(0))
+            mask2 = np.floor( self.pmask[r2].mean(0))
+           
+            masked = mask1*mask2
+
+            ring1 = mask1* (self.pd[ i1, r1].mean(0))
+            ring2 = mask2* (self.pd[ i2, r2].mean(0))
+
+            if rm_spots:
+                ring1, mask1, removed1 = helper.remove_peaks(ring1,
+                                         mask1, thick=spot_thick, 
+                                    coef=coef1, peak_thresh=spot_thresh)
+                ring2, mask2, removed2 = helper.remove_peaks( ring2,
+                                          mask2, thick=spot_thick, 
+                                     coef=coef2, peak_thresh=spot_thresh)
+                masked = mask1*mask2
+
+            else:
+                masked = mask1*mask2
+#           
+            peak_mask = np.vstack( [masked for _ in xrange(self.nq) ] )
+            ring1 = self.pd[r1] * peak_mask*self.pmask[r1]
+            ring2 = self.pd[r2]  * peak_mask*self.pmask[r2]
+
+            if norm:
+                med1 = np.mean( ring1[ ring1 > 0 ] )
+                med2 = np.mean( ring2[ ring2 > 0 ] )
+                self.dif_imgs[i,:,:,0] = (ring1/med1)
+                self.dif_imgs[i,:,:,1] = (ring2/med2)
+            else:
+                self.dif_imgs[i,:,:,0] = ring1 
+                self.dif_imgs[i,:,:,1] = ring2 
+
+        self.dif_imgs = np.delete(self.dif_imgs, 
+                            overflow_inds, axis=0)
+
+
     def make_dif_cors(self):
         """ makes difference correlations using RingData.DiffCorr"""
         print "Making difference correlations..."
         assert( self.dif_imgs is not None)
         differences = self.dif_imgs[:,:,0] - self.dif_imgs[:,:,1]
+        DC = RingData.DiffCorr(differences, pre_dif=True)
+        self.dif_cors = DC.autocorr()
+    
+    def make_dif_cors2D(self):
+        """ makes difference correlations using RingData.DiffCorr"""
+        print "Making difference correlations..."
+        assert( self.dif_imgs is not None)
+        differences = self.dif_imgs[:,:,:,0] - self.dif_imgs[:,:,:,1]
         DC = RingData.DiffCorr(differences, pre_dif=True)
         self.dif_cors = DC.autocorr()
     
