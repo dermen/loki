@@ -11,13 +11,14 @@ class MakeTagPairs:
     def __init__(self, db_pickle, nphi, fixed_qr=False, qrmin=None, 
                     qrmax=None, dqr=1, phi_res=10, rm_mean_outliers=True,
                     rm_mean_thresh=3, min_grp_size=20, signal=None, 
-                    min_signal = None):
+                    min_signal = None, max_signal = None):
         """
         'db_pickle' - pandas pickle file from make_db.MakeDatabase
         'nphi'      - number of azimutha points around ring I(phi)
                         should be full range from 0 -2pi
-        'fixed_qr' - whether the radial position of each q changing from shot
-                    to shot (e.g. if used pk_detect=True in MakeDatabase
+        'fixed_qr' - whether the radial position of each q changing from
+                     shot to shot (e.g. if used pk_detect=True 
+                     in MakeDatabase
         
         If the qr is fluctating, this will group shots according to their
             pk_pos (q  of max intensity along radial profile), and then
@@ -27,8 +28,8 @@ class MakeTagPairs:
         'qrmin'     - min q to form into groups
         'qrmax'     - max q to form into groups
         'dqr'           - how wide the qr bins are , default is 1
-        'min_grp_size' - if grouping according to qr, how big should a group
-                        be in order to be analyzed 
+        'min_grp_size' - if grouping according to qr, how big should a 
+                        group be in order to be analyzed 
 
         If a shot has pk_pos < qrmin or pk_pos > qrmax, then the shot will 
         not be included in the analysis
@@ -37,14 +38,18 @@ class MakeTagPairs:
         'rm_mean_thresh'   - threshhold parameter for removing shots
                             make this lower to remove more shots
 
-        'phi_res' - resolution parameter for computing polynomials along 0-2PI 
+        'phi_res' - resolution parameter for computing polynomials along
+                     0-2PI 
                     (used for poly comparison of shots)
                 default is 10, so the res will be   10 * 2pi/nphi
                 make this number higher to speed up comparison computation, 
                 but dont make it too high (has'nt been tested)
         'signal'       - tells what kind of signal should be thresholded
                         can be ['mean', 'stdev', 'snr' ]
-        'min_signal'   - minimum signal (as determined by the 'signal' parameter) 
+        'min_signal'   - minimum signal (as determined by the 'signal' 
+                        parameter) 
+        'max_signal'   - maximum signal (as determined by the 'signal'
+                         parameter) 
                         for a shot to be considered for analysis
         """
         self.db_pickle = db_pickle
@@ -82,9 +87,11 @@ class MakeTagPairs:
             self.df['sig'] = self.df.pk_amp / self.df.background_offset
 
         if signal is not None:
-            assert( min_signal is not None)
             n_total = len(self.df)
-            self.df = self.df.query('sig >= %f'%min_signal )
+            if min_signal is not None:
+                self.df = self.df.query('sig >= %f'%min_signal )
+            if max_signal is not None:
+                self.df = self.df.query('sig <= %f'%max_signal )
             n_removed = n_total - len(self.df)
             print "Removed %d/%d exposures from analysis"%(n_removed,
                                                             n_total)
@@ -92,7 +99,7 @@ class MakeTagPairs:
 #       exclude exposures with a high/low mean intensity
         if rm_mean_outliers:
             print "Removing shot mean outliers..."
-            self._drop_shotmean_outliers(rm_mean_thresh)
+            self._drop_shotmean_outliers(thresh=rm_mean_thresh)
         
         self.groups = None
         self.u_gruops = None
@@ -239,9 +246,10 @@ if __name__ == '__main__':
     qrmin = 20 # min q radius relative to qmin (pixel units)
     qrmax = 60 # max q ..                  
     nphi = 5000 # nphi is number of points from 0-2PI in polar image
-    makeTagPairs = MakeTagPairs(db_pickle,nphi, qrmin=qrmin, qrmax=qrmax,
-                        signal='snr', min_signal=0.2)
-
+    makeTagPairs = MakeTagPairs(db_pickle,nphi, qrmin=qrmin, dqr=1, 
+                        qrmax=qrmax, signal='mean', min_signal=325,
+                        rm_mean_thresh=5, max_signal=3300)
+    
     outf = '/data/work/mender/loki/interped_178802_pairs.json'
     makeTagPairs.Make(outf)
         
