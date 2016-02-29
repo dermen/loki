@@ -206,9 +206,9 @@ class MakeTagPairs:
 
     def _find_min_pairs(self):
         pair_inds = []
-        for i in xrange(len(self.eps_order) ):
+        for i in xrange(len(self.eps_order)):
             min_row = list(eps_order[i])
-            min_pair = [i, min_row.pop(0) ]
+            min_pair = [i, min_row.pop(0)]
             while np.any([ind in pair_inds 
                         for ind in min_pair]):
                 try:
