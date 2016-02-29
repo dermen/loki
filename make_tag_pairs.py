@@ -138,7 +138,6 @@ class MakeTagPairs:
         self.poly_thresh = poly_thresh
 
         self.tag_pairs = []
-        self.pair_inds = []
         self.eps_min = []
         if not self.fixed_qr:        
             print "Iterating over groups and pairing"
@@ -148,8 +147,8 @@ class MakeTagPairs:
             print "Pairing all remaining shots in database"
             self.df_g = self.df
             self._pair_group()
+            self._find_min_pairs()
         
-        self._find_min_pairs()
         self._save_tag_pairs()
 
     def _iterate_groups(self):
@@ -163,7 +162,8 @@ class MakeTagPairs:
             if len(self.df_g) < self.min_grp_size:
                 continue 
             self._pair_group()    
-            
+            self._find_min_pairs()
+
     def _pair_group(self):
         """
         Pairs exposures in a dataframe group according to the
@@ -186,22 +186,43 @@ class MakeTagPairs:
         epsI = eps.max(1)*np.identity(ngroup)
         eps += epsI
         
+        self.eps_order = np.argsort( eps,1)
+
         # check if there are any outlier values of eps (if there are
         # they should be positive outliers (greater than the mean)
-        outliers = is_outlier(eps.min(1),thresh=self.poly_thresh)
+        # outliers = is_outlier(eps.min(1),thresh=self.poly_thresh)
 
         # pair each shot with the shot that gives minimum eps
         
         #df_g stores the global indices in the database
-        global_inds = self.df_g.index.values
-        for i in xrange( eps.shape[0] ):
-            j = eps[i].argmin()
-            if not outliers[i]:
-                pair = global_inds[ [i,j] ]
-                self.pair_inds.append( pair)
-                self.eps_min.append( eps[i,j]  )
-        
+        #global_inds = self.df_g.index.values
+        #for i in xrange( eps.shape[0] ):
+        #    j = eps[i].argmin()
+        #    if not outliers[i]:
+        #        pair = global_inds[ [i,j] ]
+        #        self.pair_inds.append( pair)
+        #        self.eps_min.append( eps[i,j]  )
+    
+
     def _find_min_pairs(self):
+        pair_inds = []
+        for i in xrange(len(self.eps_order) ):
+            min_row = list(eps_order[i])
+            min_pair = [i, min_row.pop(0) ]
+            while np.any([ind in pair_inds 
+                        for ind in min_pair]):
+                try:
+                    min_pair = [i, min_row.pop(0)]
+                except IndexError:
+                    min_pair = None
+                    break
+            if min_pair is not None and len(set(min_pair)) > 1:
+                pair_inds.extend(min_pair)
+                tag_pair = map(str, self.df_g.tag[min_pair])
+                self.tag_pairs.extend( tag_pair)
+            
+
+    def _find_min_pairs2(self):
         """ 
         Sometimes an exposure is paired used more than once
         and we would like to find the minimum pair 
@@ -235,6 +256,8 @@ class MakeTagPairs:
         """
         saves the tag pairings list in a json file
         """
+        self.tag_pairs = zip( self.tag_pairs[::2], 
+                                    self.tag_pairs[1::2] )
         print "Made %d tag pairings..."%len(self.tag_pairs)
         outfile_ = open( self.outfile, 'w')
         json.dump( self.tag_pairs, outfile_)
