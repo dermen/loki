@@ -206,9 +206,9 @@ class MakeTagPairs:
 
     def _find_min_pairs(self):
         pair_inds = []
-        for i in xrange(len(self.eps_order)):
-            min_row = list(eps_order[i])
-            min_pair = [i, min_row.pop(0)]
+        for i in xrange(len(self.eps_order) ):
+            min_row = list(self.eps_order[i])
+            min_pair = [i, min_row.pop(0) ]
             while np.any([ind in pair_inds 
                         for ind in min_pair]):
                 try:
@@ -221,7 +221,6 @@ class MakeTagPairs:
                 tag_pair = map(str, self.df_g.tag[min_pair])
                 self.tag_pairs.extend( tag_pair)
             
-
     def _find_min_pairs2(self):
         """ 
         Sometimes an exposure is paired used more than once
@@ -265,11 +264,11 @@ class MakeTagPairs:
         print "Saved tag pairings in json file: %s"%self.outfile
 
 if __name__ == '__main__':
-    db_pickle = '/data/work/mender/interped_178802.pkl'
+    db_pickle = '/data/work/mender/pkl_files/interped_178802.pkl'
     qrmin = 20 # min q radius relative to qmin (pixel units)
     qrmax = 60 # max q ..                  
     nphi = 5000 # nphi is number of points from 0-2PI in polar image
-    makeTagPairs = MakeTagPairs(db_pickle,nphi, qrmin=qrmin, dqr=1, 
+    makeTagPairs = MakeTagPairs(db_pickle,nphi, qrmin=qrmin, dqr=3, 
                         qrmax=qrmax, signal='mean', min_signal=325,
                         rm_mean_thresh=5, max_signal=3300)
     
