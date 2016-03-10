@@ -105,7 +105,7 @@ def remove_peaks(Ring, Mask, thick=None, peak_thresh=3.0,
     return ring*mask, mask, removed
 
 def get_ring( pdata, pmask, iq, del_q=2, rm_peaks=True, 
-                rm_extent=1, peak_thresh=2.):
+                rm_extent=1, rm_thresh=2.):
     """
     'pdata' - a 2d polar image shape is (N_radial, N_polar)
     'pmask' - a 2d polar mask same shape as pmask
@@ -231,11 +231,29 @@ def smooth(x, beta=10.0, window_size=11):
 
 
 def lorentz( x,p0,p1,p2, p3) :
-    return  (p2/np.pi) * (p1 / 2. ) * (1/( (x-p0)*(x-p0) + p1*p1/4. )   ) + p3
+    return  (p2/np.pi) * (p1 / 2. ) * (1/( (x-p0)*(x-p0) + p1*p1/4. )) + p3
 
 def lorentz2( x,p0,p1) :
-    return  (1./np.pi) * (p1 / 2. ) * (1/( (x-p0)*(x-p0) + p1*p1/4. )   ) 
+    return  (1./np.pi) * (p1 / 2. ) * (1/( (x-p0)*(x-p0) + p1*p1/4. )) 
 
+def lorentz2_offset( x,p0,p1, offset) :
+    return  offset + (1./np.pi) * (p1 / 2. ) * (1/( (x-p0)*(x-p0) + p1*p1/4.)) 
+
+def fit_lorentz_offset_fixed_mu( ydata, xdata, mu):#, gamma_i):
+    amp = ydata.ptp() /2.
+    offset  = ydata.min()
+    gamma_i = 2 / np.pi/ amp 
+
+    L = lambda x,p1,offset_param : offset_param + (1./np.pi)*(p1/2.)\
+                *(1/((x-mu)*(x-mu)+p1*p1/4.))
+    
+    try:
+        fit,success = optimize.curve_fit(L, xdata=xdata,
+                                    ydata=ydata, p0=guess)
+    except RuntimeError:
+        return None
+    
+    return fit, success, gauss_offset(xdata, *fit)
 
 def root( x, *p):
     m,b = p
