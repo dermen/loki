@@ -219,11 +219,17 @@ class RingFetch:
             nphi = int( 2*np.pi*radius) 
 
 
+#           ########################################################
+#           Here is where the magic begins
+#           ########################################################
 #           make the RingData interpolator object
+#           (The trick here is that we interpolate the image at single
+#           pixel precision (hence nphi = 2*pi*radius) and we only
+#           inteprolate a ring that is 1 pixel wide at given radius.
+#           In this way we follow the resolution of the detector 
             InterpSimp = InterpSimple( self.a, self.b, radius+1,
                             radius, nphi, raw_img_shape=self.img.shape)
 
-#           interpolate the polar mask
 #           now interpolate that image
             polar_img = InterpSimp.nearest(self.img)
 
@@ -233,6 +239,7 @@ class RingFetch:
 #           Fill in masked gaps with a Gaussian noise
 #           #########################################
             if self.mask is not None:
+#               interpolate the polar mask
                 polar_mask = InterpSimp.nearest(self.mask.astype(int))
                 self.polar_ring_mask = polar_mask[0]
                 self._fill_polar_ring( nphi )
