@@ -139,7 +139,6 @@ class RingFetch:
         
 
         '''
-
         self.a = a
         self.b = b
         if mask is not None:
@@ -160,8 +159,11 @@ class RingFetch:
     def set_working_image( self, img):
         '''img is a two-dimensional diffraction image with ring patterns'''
         if self.mask is not None:
-            assert( self.mask.shape == img.shape )
+            assert(self.mask.shape == img.shape)
         self.img = img
+        
+        possible_max_radii = (img.shape[1] - self.a, self.a , img.shape[0]-self.b, self.b)
+        self.maximum_allowable_ring_radius = np.min( possible_max_radii)
 
     def fetch_a_ring(self, ring_radius, poly_deg=10):
         '''
@@ -188,6 +190,7 @@ class RingFetch:
         '''
         if self.img is None:
             raise( 'Set the working image first!' )
+        
 
         self.poly_deg = poly_deg
 
@@ -206,8 +209,16 @@ class RingFetch:
         rmin = int( self.q2r(qmin) ) 
         rmax = int(np.ceil( self.q2r(qmax) )) # "" ""
 
+        assert( rmax < self.maximum_allowable_ring_radius)
+
+        nphi_min = int( 2 * np.pi * rmin )
+        assert(nphi_min > self.num_phi_nodes)
+
+        print ( 'rmin  / rmax = %d/%d'%(rmin,rmax) )
+
 #       number of radial pixel units across ring
         pix_per_delta_q = rmax-rmin  
+
 
 #       store the output
         polar_ring_final = np.zeros((pix_per_delta_q+1, self.num_phi_nodes ) )
@@ -380,11 +391,17 @@ class RadialProfile:
         self.mask = mask
 
 #       Make the radius of each pixel
-        Y,X = np.indices( img_shape )
-        self.R = np.sqrt((Y-self.y_center)**2 + (X-self.x_center)**2)
+        self.Y, self.X = np.indices( img_shape )
+        self._set_R()
+        self._set_normalization()
+
+    def _set_R(self):
+        self.R = np.sqrt((self.Y-self.y_center)**2 + \
+                        (self.X-self.x_center)**2)
         self.R = self.R.astype(int)
         
-        if mask is None:
+    def _set_normalization(self):
+        if self.mask is None:
             self.num_pixels_per_radial_bin = np.bincount( self.R.ravel(), 
                                     minlength=self.minlength)
         else:
@@ -411,6 +428,12 @@ class RadialProfile:
                             self.num_pixels_per_radial_bin
 
         return np.nan_to_num(radial_profile)
+
+    def update_center( self, new_center):
+        self.x_center = new_center[0]
+        self.y_center = new_center[1]
+        self._set_R()
+        self._set_normalization()
 
 
 class DiffCorr:
