@@ -26,7 +26,7 @@ mask = np.load( 'test_mask.npy' )
 
 # this is an approximate radial profile because the center is inaccurate
 RP = RingData.RadialProfile( center_guess, 
-                        img_shape=img.shape, mask=mask, minlength=300  ) 
+                        img_shape=img.shape, mask=mask, minlength=1900  ) 
 radial_profile = RP.calculate(img )
 
 ###################
@@ -80,7 +80,6 @@ ax.add_patch(circ)
 RP.update_center( (x_center, y_center) )
 refined_radial_profile = RP.calculate(img )
 
-
 fig3 = plt.figure(3)
 ax = plt.gca()
 ax.tick_params(which='both', labelsize=12, length=0)
@@ -118,12 +117,6 @@ detdist = 0.051 # meters
 # x-ray photon wavelength
 wavelen = 1.41 # angstroms
 
-RingFetch = RingData.RingFetch( x_center, y_center, img, mask=mask, 
-                        q_resolution=0.05, phi_resolution=1.25, 
-                        wavelen=wavelen, pixsize=pixsize, detdist=detdist)
-
-phis, ring = RingFetch.fetch_a_ring( interesting_peak_radius)
-
 # Make the CCD -> photon conversion factor
 # detector absolute gain
 gain = 16.912
@@ -131,6 +124,12 @@ gain = 16.912
 energy = 12398.42 / wavelen  # electron-Volts
 # factor
 photon_conversion_factor = gain * 3.65 / energy
+
+RingFetch = RingData.RingFetch( x_center, y_center, img, mask=mask, 
+                        q_resolution=0.05, phi_resolution=1.25, 
+                        wavelen=wavelen, pixsize=pixsize, detdist=detdist,
+                        photon_conversion_factor=photon_conversion_factor)
+phis, ring = RingFetch.fetch_a_ring( interesting_peak_radius)
 
 
 fig4 = plt.figure(4)
