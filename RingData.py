@@ -272,8 +272,8 @@ class RingFetch:
             phi_node_edge_index = phi_node_edge_index.astype(int)
 
 #           take the center of the ndoe as the index
-            phi_node_index =np.array( [ int(.5*phi_nodes_edge_index[i] + 
-                                            .5*phi_nodes_edge_index[i+1]) 
+            phi_node_index =np.array( [ int(.5*phi_node_edge_index[i] + 
+                                            .5*phi_node_edge_index[i+1]) 
                                     for i in xrange(self.num_phi_nodes)])
  
 #           number of pixels per  phi node (bin)
