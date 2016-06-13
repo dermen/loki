@@ -203,8 +203,8 @@ class MakeTagPairs:
         #        self.pair_inds.append( pair)
         #        self.eps_min.append( eps[i,j]  )
     
-
     def _find_min_pairs(self):
+        group_tags = self.df_g.tag.values
         pair_inds = []
         for i in xrange(len(self.eps_order) ):
             min_row = list(self.eps_order[i])
@@ -218,7 +218,7 @@ class MakeTagPairs:
                     break
             if min_pair is not None and len(set(min_pair)) > 1:
                 pair_inds.extend(min_pair)
-                tag_pair = map(str, self.df_g.tag[min_pair])
+                tag_pair = map(str, group_tags[min_pair])
                 self.tag_pairs.extend( tag_pair)
             
     def _find_min_pairs2(self):
