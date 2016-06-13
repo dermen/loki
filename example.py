@@ -16,10 +16,8 @@ img = np.load('test_img.npy')
 # last dimension is fast (horizontal for 2D) dimension in numpy arrays ;)
 center_guess = ( 2+img.shape[1] / 2., 1+img.shape[0] / 2. )
 
-# make a mask for fun (True is unmasked, False is masked)
-min_intensity = 100 # gaps and bordering pixels fall below this threshold
-mask = np.ones_like( img ).astype(bool)
-mask[ img < min_intensity ] = False
+# make a mask that has the same shape as img (True is unmasked, False is masked)
+mask = np.load( 'test_mask.npy' )
 
 # make a radial profile
 # and then we can pick a peak for measuring the center..
@@ -49,7 +47,7 @@ peak_radius_guess = 16
 ring_param_guess = ( center_guess[0], center_guess[1], peak_radius_guess )
 
 # use the guessed paraemters to optimize the center coordinate
-RF = RingData.RingFit( img)
+RF = RingData.RingFit(img)
 x_center,y_center,peak_radius = RF.fit_circle( ring_param_guess, 
                                 num_fitting_pts=20, 
                                 ring_width=10, num_high_pix=2 )
@@ -72,7 +70,7 @@ ax.set_yticks( [] )
 ax.imshow(img[125:175,125:175], cmap='hot', interpolation='nearest')
 circ = plt.Circle( xy=(x_center-125, y_center-125), radius=peak_radius, 
                 ec='c', lw=2, fc='none', ls='dashed' ) 
-ax.add_patch( circ)
+ax.add_patch(circ)
 
 
 # now make another radial profile with the correct center
@@ -112,7 +110,7 @@ interesting_peak_radius = 59
 pixsize = 0.00005 # meters
 
 # test image resolution reduction
-pixsize = pixsize * 6
+pixsize = pixsize * 8
 
 # sample to detector distance
 detdist = 0.051 # meters
@@ -120,11 +118,10 @@ detdist = 0.051 # meters
 # x-ray photon wavelength
 wavelen = 1.41 # angstroms
 
-RingFetch = RingData.RingFetch( x_center, y_center, mask=mask, 
+RingFetch = RingData.RingFetch( x_center, y_center, img, mask=mask, 
                         q_resolution=0.05, phi_resolution=1.25, 
                         wavelen=wavelen, pixsize=pixsize, detdist=detdist)
 
-RingFetch.set_working_image( img )
 phis, ring = RingFetch.fetch_a_ring( interesting_peak_radius)
 
 # Make the CCD -> photon conversion factor

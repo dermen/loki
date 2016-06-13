@@ -22,16 +22,16 @@ class RingFit:
         self.circle_model  = odr.Model( f_circle, implicit=True)
 
 #       make 2d and 1d index arrays       
-        self.y,self.x = indices( img.shape )
+        self.y,self.x = np.indices( img.shape )
         self.x1   = self.x.ravel()
         self.y1   = self.y.ravel()
         
-        self.img = copy(img)
+        self.img = np.copy(img)
 
     def _remove_highest( self, data_array, num_high_pix):
 #       removes the highest pixels so they don't corrupt the fit 
 #           (e.g. bad pixels)
-        high_inds = argsort( data_array )[:num_high_pix]
+        high_inds = np.argsort( data_array )[:num_high_pix]
         data_array[ high_inds ] = 0
         return data_array
 
@@ -50,7 +50,7 @@ class RingFit:
         '''
 #       radius of each pixel 
         r = sqrt ( (self.x - beta_i[0])**2 + (self.y - beta_i[1])**2  )
-        img_copy = copy ( self.img ) 
+        img_copy = np.copy ( self.img ) 
 #       remove all pixels outside of a radius range        
         img_copy[ r > beta_i[2] + ring_width/2 ] = 0
         img_copy[ r < beta_i[2] - ring_width/2 ] = 0
@@ -59,15 +59,15 @@ class RingFit:
         img1 = img_copy.ravel()
         self._remove_highest( img1 , num_high_pix )
 
-        num_pts = where( img1 > 0 )[0].shape[0]
+        num_pts = np.where( img1 > 0 )[0].shape[0]
         if num_fitting_pts >= num_pts :
             num_fitting_pts = num_pts / 2
 
 #       find indices of remaining pixels in order of decreasing intensity 
-        inds = argsort( img1 )[::-1][: num_fitting_pts]
+        inds = np.argsort( img1 )[::-1][: num_fitting_pts]
 
 #       use odr module to fit data to circle model
-        pts = row_stack( [self.x1[ inds], self.y1[ inds]]   )
+        pts = np.row_stack( [self.x1[ inds], self.y1[ inds]]   )
         lsc_data = odr.Data( pts , y=1)
         lsc_odr = odr.ODR( lsc_data, self.circle_model, beta_i)
         lsc_out = lsc_odr.run()
@@ -90,20 +90,20 @@ class RingFit:
                                 bias the fit)
         '''
         
-        r = sqrt ( (self.x - beta_i[0])**2 + (self.y - beta_i[1])**2  )
+        r = np.sqrt ( (self.x - beta_i[0])**2 + (self.y - beta_i[1])**2  )
         self.img[ r > beta_i[2] + ring_width/2 ] = 0
         self.img[ r < beta_i[2] - ring_width/2 ] = 0
 
         img1 = self.img.ravel()
         self._remove_highest( img1 , num_high_pix )
 
-        num_pts = where( img1 > 0 )[0].shape[0]
+        num_pts = np.where( img1 > 0 )[0].shape[0]
         if num_fitting_pts >= num_pts :
             num_fitting_pts = num_pts / 2
 
-        inds = argsort( img1 )[::-1][: num_fitting_pts]
+        inds = np.argsort( img1 )[::-1][: num_fitting_pts]
 
-        pts = row_stack( [ self.x1[ inds], self.y1[ inds]  ] )
+        pts = np.row_stack( [ self.x1[ inds], self.y1[ inds]  ] )
         lsc_data = odr.Data( pts, y=1)
         lsc_odr = odr.ODR( lsc_data, self.ellipse_model, beta_i)
         lsc_out = lsc_odr.run()
@@ -112,7 +112,7 @@ class RingFit:
 # ideally we would only need to compute the polar mask once per exposure...
 # but this code framework makes that difficult.
 class RingFetch:
-    def __init__(self, a, b, mask=None, q_resolution=0.05, phi_resolution=0.5,
+    def __init__(self, a, b, img, mask=None, q_resolution=0.05, phi_resolution=0.5,
                     wavelen=1.41, pixsize=0.00005, detdist=0.051):
         '''
         Description
@@ -126,6 +126,8 @@ class RingFetch:
         `a`, `b` is the horizontal, vertical pixel coordinate where
             forward beam intersects detector
         
+        `img` is a two-dimensional diffraction image with ring patterns
+
         `mask` is a boolean array where False,True represent masked,
             unmasked pixels in an image.
         
@@ -136,18 +138,24 @@ class RingFetch:
         `wavelen`, `pixsize`, `detdist` are photon-wavelength, pixel-size 
             (assuming square pixels) and sample-to-detector-distance in 
             Angstrom, meter, and meter units, respectively.
-        
-
         '''
         self.a = a
         self.b = b
+        self.img = img
+        
         if mask is not None:
+            assert(mask.shape == self.img.shape)
             self.mask = mask
+        
+        possible_max_radii = (self.img.shape[1] - self.a, 
+                              self.a , 
+                              self.img.shape[0]-self.b, 
+                              self.b)
+        self.maximum_allowable_ring_radius = np.min( possible_max_radii)
+        
         self.q_resolution = q_resolution
         self.phi_resolution = phi_resolution
         self.num_phi_nodes =  int ( 360.  / self.phi_resolution)
-
-        self.img = None        
 
 #       convert pixel radius to q
         self.r2q = lambda R: np.sin( np.arctan(R*pixsize/detdist)/2.) \
@@ -156,14 +164,6 @@ class RingFetch:
         self.q2r = lambda Q: np.tan( 2*np.arcsin(Q*wavelen/4/np.pi)) \
                                 *detdist/pixsize
     
-    def set_working_image( self, img):
-        '''img is a two-dimensional diffraction image with ring patterns'''
-        if self.mask is not None:
-            assert(self.mask.shape == img.shape)
-        self.img = img
-        
-        possible_max_radii = (img.shape[1] - self.a, self.a , img.shape[0]-self.b, self.b)
-        self.maximum_allowable_ring_radius = np.min( possible_max_radii)
 
     def fetch_a_ring(self, ring_radius, poly_deg=10):
         '''
@@ -191,7 +191,6 @@ class RingFetch:
         if self.img is None:
             raise( 'Set the working image first!' )
         
-
         self.poly_deg = poly_deg
 
 #       ########################
@@ -217,8 +216,7 @@ class RingFetch:
         print ( 'rmin  / rmax = %d/%d'%(rmin,rmax) )
 
 #       number of radial pixel units across ring
-        pix_per_delta_q = rmax-rmin  
-
+        pix_per_delta_q = rmax-rmin
 
 #       store the output
         polar_ring_final = np.zeros((pix_per_delta_q+1, self.num_phi_nodes ) )
@@ -290,11 +288,12 @@ class RingFetch:
         xvals = np.arange( nphi)  # for polyfitting
         yvals = self.polar_ring* self.polar_ring_mask # for polyfitting
 #           fit to the non-masked points
-        poly_coef = np.polyfit( xvals[yvals > 0], yvals[ yvals >0],
+        poly_coef = np.polyfit( xvals[yvals > 0], yvals[yvals >0],
                                     deg=self.poly_deg )
 #       find the polynomial fit across the range
         moving_mean = np.polyval( poly_coef, xvals )
 #       isolate the moving mean within the gaps
+        
         gapped_moving_mean = moving_mean[ yvals == 0 ]
 #       find the standard deviation of the signal about the moving mean
         width = np.std((yvals-moving_mean)[ yvals > 0])
