@@ -120,8 +120,9 @@ class RingFit:
 # ideally we would only need to compute the polar mask once per exposure...
 # but this code framework makes that difficult.
 class RingFetch:
-    def __init__(self, a, b, img, mask=None, q_resolution=0.05, phi_resolution=0.5,
-                    wavelen=1.41, pixsize=0.00005, detdist=0.051):
+    def __init__(self, a, b, img, mask=None, q_resolution=0.05, 
+                    phi_resolution=0.5,wavelen=1.41, pixsize=0.00005, 
+                    detdist=0.051, photon_conversion_factor=1):
         '''
         Description
         ===========
@@ -150,7 +151,7 @@ class RingFetch:
         self.a = a
         self.b = b
         self.img = img
-        
+
         if mask is not None:
             assert(mask.shape == self.img.shape)
             self.mask = mask
@@ -172,7 +173,8 @@ class RingFetch:
         self.q2r = lambda Q: np.tan( 2*np.arcsin(Q*wavelen/4/np.pi)) \
                                 *detdist/pixsize
     
-
+        self.photon_conversion_factor = photon_conversion_factor
+    
     def fetch_a_ring(self, ring_radius, poly_deg=10):
         '''
         Parameters
@@ -227,14 +229,17 @@ class RingFetch:
         pix_per_delta_q = rmax-rmin
 
 #       store the output
-        polar_ring_final = np.zeros((pix_per_delta_q+1, self.num_phi_nodes ) )
-        azimuthal_values = np.zeros((pix_per_delta_q+1, self.num_phi_nodes ) )
+        polar_ring_final = np.zeros((pix_per_delta_q+1,
+                                    self.num_phi_nodes ) )
+        azimuthal_values = np.zeros((pix_per_delta_q+1,
+                                    self.num_phi_nodes ) )
 
+        polar_ring_final = np.zeros( self.num_phi_nodes )
+        azimuthal_values = np.zeros( self.num_phi_nodes )
 
         for radius_index, radius in enumerate( xrange(rmin, rmax+1)):
 #           number of azimuthal points in radial image
             nphi = int( 2*np.pi*radius) 
-
 
 #           ########################################################
 #           Here is where the magic begins
@@ -262,32 +267,39 @@ class RingFetch:
                 self._fill_polar_ring( nphi )
 
 #           now that we filled in the gaps, let's do the azimuthal binning
-            phi_nodes = np.linspace(0, nphi, self.num_phi_nodes+1,
-                                        endpoint=1 )
-            phi_nodes = phi_nodes.astype(int)
+            phi_node_edge_index = np.linspace(0, nphi, 
+                                    self.num_phi_nodes+1, endpoint=1 )
+            phi_node_edge_index = phi_node_edge_index.astype(int)
 
-            phi_node_index =np.array( [ int(.5*phi_nodes[i] + .5*phi_nodes[i+1]) 
+#           take the center of the ndoe as the index
+            phi_node_index =np.array( [ int(.5*phi_nodes_edge_index[i] + 
+                                            .5*phi_nodes_edge_index[i+1]) 
                                     for i in xrange(self.num_phi_nodes)])
-            
-#           sum the bins up
-            pix_per_delta_phi = int( self.phi_resolution * ( nphi / 360. ) )
+ 
+#           number of pixels per  phi node (bin)
+            pix_per_delta_phi = int( self.phi_resolution*( nphi / 360. ) )
            
-#           make the azimuthal bin edges 
+#           index the azimuthal bins 
 #           (code vommit)
             phi_ranges = [ (i -pix_per_delta_phi/2, \
-                            1*(pix_per_delta_phi%2) +i+pix_per_delta_phi/2 ) 
-                            for i in phi_node_index ]
+                        1*(pix_per_delta_phi%2) +i+pix_per_delta_phi/2 ) 
+                        for i in phi_node_index ]
+#           wrap the edges...
+            phi_indices_wrapped = [ (np.arange( r1,r2)+ nphi)%nphi 
+                                    for r1,r2 in phi_ranges ]
 
 #           store the phi values of each node 
 #           in case they are changing from radius to radius
-            azimuthal_values[radius_index] = np.arange(nphi)[phi_node_index] \
-                                                        *2*pi/nphi
+            azimuthal_values += np.arange(nphi)\
+                                        [phi_node_index]*2*pi/nphi
 #           sum up the intensities in each azimuthal bin bin
-            polar_ring_final[radius_index] =  \
-                                array( [ sum(self.polar_ring[ r1:r2 ]) 
-                                        for r1,r2 in phi_ranges ] ) 
+            polar_ring_final +=  \
+                                array( [ sum(self.polar_ring[ indices ]) 
+                                        for indices in 
+                                    phi_indices_wrapped ] )\
+                                    *self.photon_conversion_factor
             
-        return azimuthal_values.mean(0), polar_ring_final.sum(0)
+        return azimuthal_values / (pix_per_delta_q+1.) , polar_ring_final
 
     def _fill_polar_ring(self, nphi ):
 #       (I am not sure but this may be important step since i think we want
@@ -306,9 +318,9 @@ class RingFetch:
 #       find the standard deviation of the signal about the moving mean
         width = np.std((yvals-moving_mean)[ yvals > 0])
 #       fill in the gaps wih a Gaussian noise of corresponding width
-        self.polar_ring[ self.polar_ring_mask==0] = np.random.normal( \
+        self.polar_ring[ yvals == 0] = np.random.normal( \
                                                         gapped_moving_mean, 
-                                                                width )
+                                                        width )
 
 
 class InterpSimple:
