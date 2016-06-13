@@ -34,14 +34,22 @@ class RingFit:
         data_array[ high_inds ] = 0
         return data_array
 
-    def fit_circle( self, beta_i, num_fitting_pts=5000, ring_width=20 , num_high_pix=20  ):
+    def fit_circle( self, beta_i, num_fitting_pts=5000, 
+                ring_width=20 , num_high_pix=20, 
+                return_mean = False):
         '''
         Fit a circle to a ring image
         ============================== 
         beta_i          - float tuple , ( x_center, y_center,radius )
         num_fitting_pts - int, number of pixels to include in fit 
-        ring_width      - int, width ring-like region on image that contains ring of interest (pixels units)
-        num_high_pix    - int, remove this many pixels before running fit (removes artificial high pixels that might bias the fit)
+        ring_width      - int, width ring-like region on image that 
+                            contains ring of interest (pixels units)
+        num_high_pix    - int, remove this many pixels before 
+                            running fit (removes artificial high pixels 
+                            that might bias the fit)
+        return_mean     - bool, whether or not to return 
+                                        the mean intensity of the sampled
+                                        pixels
         '''
 #       radius of each pixel 
         r = sqrt ( (self.x - beta_i[0])**2 + (self.y - beta_i[1])**2  )
@@ -61,11 +69,15 @@ class RingFit:
 #       find indices of remaining pixels in order of decreasing intensity 
         inds = argsort( img1 )[::-1][: num_fitting_pts]
 
+        
+
 #       use odr module to fit data to circle model
         pts = row_stack( [self.x1[ inds], self.y1[ inds]]   )
         lsc_data = odr.Data( pts , y=1)
         lsc_odr = odr.ODR( lsc_data, self.circle_model, beta_i)
         lsc_out = lsc_odr.run()
+        if return_mean:
+            return lsc_out.beta, img1[inds].mean()
         return lsc_out.beta
 
     def fit_ellipse(self, beta_i  ,num_fitting_pts=5000, ring_width=40,num_high_pix = 20):
