@@ -318,10 +318,9 @@ class RingFetch:
 #       find the standard deviation of the signal about the moving mean
         width = np.std((yvals-moving_mean)[ yvals > 0])
 #       fill in the gaps wih a Gaussian noise of corresponding width
-        self.polar_ring[ yvals == 0] = np.random.normal( \
-                                                        gapped_moving_mean, 
-                                                        width )
-
+        noise = np.random.normal( gapped_moving_mean, width ) 
+        
+        self.polar_ring[ yvals == 0] = noise.astype(float32)
 
 class InterpSimple:
     def __init__ ( self,  a,b, qmax,qmin, nphi, raw_img_shape, bin_fac=None ) : 
