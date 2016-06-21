@@ -2,7 +2,6 @@ from scipy.interpolate import RectBivariateSpline
 from scipy import odr
 from scipy.ndimage import zoom
 
-#import 
 
 class RingFit:
     def __init__( self, img ):
