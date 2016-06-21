@@ -34,6 +34,59 @@ class RingFit:
         data_array[ high_inds ] = 0
         return data_array
 
+
+    def fit_circle_slow(self, beta_i, ring_scan_width, center_scan_width, 
+                            resolution=None ):
+        
+        ring_radius_guess = round( beta_i[2] )
+        ring_scan_start = ring_radius_guess - int( ring_scan_width / 2 )
+        ring_scan_stop = ring_radius_guess + int( ring_scan_width / 2 )
+
+        center_x_guess, center_y_guess =  round(beta_i[0]), \
+                                        round( beta_i[1] )  
+        
+        num_scan_points = int( center_scan_width) 
+        scan_range_x = np.linspace(center_x_guess- \
+                                        center_scan_width / 2. , 
+                                    center_x_guess + \
+                                        center_scan_width / 2. , 
+                                    num_scan_points )
+        scan_range_y = np.linspace(center_y_guess- \
+                                        center_scan_width / 2. , 
+                                    center_y_guess + \
+                                        center_scan_width / 2. , 
+                                    num_scan_points )
+        
+        possible_centers = [ (x,y) for x in scan_range_x
+                            for y in scan_range_y]
+
+
+        RadPro = RadialProfile( center=(center_x_guess, \
+                                        center_y_guess), 
+                                img_shape=self.img.shape, mask=None, 
+                                minlength=self.img.shape[0] )
+
+        possible_ring_profiles = []
+        for center in possible_centers:
+            RadPro.update_center( center)
+            radial_profile = RadPro.calculate( self.img) 
+            ring_profile = radial_profile[ ring_scan_start:\
+                                            ring_scan_stop]
+            possible_ring_profiles.append( ring_profile)
+
+        ring_profile_maxima = [ max( ring_profile) 
+                        for ring_profile in possible_ring_profiles ]
+        fit_center = possible_centers[ np.argmax(ring_profile_maxima) ]
+        
+        max_profile = possible_ring_profiles[ \
+                                np.argmax(ring_profile_maxima) ]
+        fit_radius = np.argmax( max_profile ) + ring_scan_start
+        
+        beta_fit = ( fit_center[0], fit_center[1], fit_radius )
+
+        return beta_fit
+
+
     def fit_circle( self, beta_i, num_fitting_pts=5000, 
                 ring_width=20 , num_high_pix=20, 
                 return_mean = False):
@@ -153,7 +206,7 @@ class RingFetch:
 
         if mask is not None:
             assert(mask.shape == self.img.shape)
-            self.mask = mask
+        self.mask = mask
         
         possible_max_radii = (self.img.shape[1] - self.a, 
                               self.a , 
@@ -257,6 +310,7 @@ class RingFetch:
 #               interpolate the polar mask
                 polar_mask = InterpSimp.nearest(self.mask.astype(int))
                 self.polar_ring_mask = polar_mask[0]
+                #self._fill_polar_ring_dumb( nphi )
                 self._fill_polar_ring( nphi )
 
 #           now that we filled in the gaps, let's do the azimuthal binning
@@ -294,7 +348,49 @@ class RingFetch:
             
         return azimuthal_values / (pix_per_q_node) , polar_ring_final
 
-    def _fill_polar_ring(self, nphi ):
+    
+    def _fill_polar_ring( self, nphi, overlap_percentage=0.2,
+                            sample_width=20 ):
+        
+        ring = self.polar_ring*(self.polar_ring_mask.astype(float))
+        
+        n_overlap = int( overlap_percentage* nphi)
+        yvals = np.zeros(nphi + 2*n_overlap)
+        yvals[ n_overlap: nphi+n_overlap  ] = ring
+        yvals[:n_overlap] = ring[-n_overlap:]
+        yvals[-n_overlap:] = ring[:n_overlap]
+        
+        is_an_edge = np.logical_xor( yvals, 
+                                np.roll( yvals, 1) )
+        mask_edge_indices = np.where( is_an_edge ) [0] 
+        
+        if yvals[0] ==0:
+            left_edges = mask_edge_indices[1::2]
+            right_edges = mask_edge_indices[::2]
+        else:
+            left_edges = mask_edge_indices[::2]
+            right_edges = mask_edge_indices[1::2]
+
+
+        for iL, iR in zip( left_edges, right_edges):
+#           estimate the edge means
+            left_mean = yvals[iL-sample_width:iL].mean() 
+            right_mean = yvals[iR:sample_width+iR].mean() 
+            slope = (right_mean - left_mean) / (iR - iL)
+            line = lambda x : slope* ( x-iL ) + left_mean
+#           estimate the edge noise 
+            left_dev = yvals[iL-sample_width:iL].std() 
+            right_dev = yvals[iR:sample_width+iR].std() 
+            edge_noise = (left_dev + right_dev) / np.sqrt(2)
+            
+            gap_range = np.arange( iL, iR )
+            gap_vals = np.random.normal( line(gap_range), edge_noise)
+
+            yvals[ gap_range] = gap_vals
+
+        self.polar_ring = yvals[ n_overlap:n_overlap+nphi]
+
+    def _fill_polar_ring_poly(self, nphi ):
 #       (I am not sure but this may be important step since i think we want
 #       the sum of the photons in a effective pixel, maybe for cross-corrs
 #       this matters)
@@ -362,10 +458,10 @@ class InterpSimple:
 
         self.xring_near = self.xring.astype(int) + \
                             np.round( self.xring - \
-                            floor(self.xring) ).astype(int)
+                            np.floor(self.xring) ).astype(int)
         self.yring_near = self.yring.astype(int) + \
                             np.round( self.yring - \
-                            floor(self.yring) ).astype(int)
+                            np.floor(self.yring) ).astype(int)
 #       'C' style ordering
         self.indices_1d = self.X* self.yring_near + self.xring_near 
 
@@ -519,18 +615,3 @@ def radial_profile( img, center=None, R = None, norm=None,
             Y,X = indices( img.shape )
             R = sqrt( (X-center[0])**2 + (Y-center[1])**2 )
             R = R.astype(np.int)
-            tbin = bincount( R.ravel(), (img*mask).ravel(), 
-                        minlength = minlength )
-            radial_profile = tbin / norm
-    else:
-        if mask == None:
-            tbin = bincount( R.ravel(), img.ravel(), minlength = minlength )
-            nr = bincount( R.ravel(), minlength = minlength )
-            radial_profile = tbin / nr
-        else:
-            tbin = bincount( R.ravel(), (img*mask).ravel(), 
-                minlength = minlength )
-            radial_profile = tbin / norm
-    
-    return nan_to_num( radial_profile )
-
