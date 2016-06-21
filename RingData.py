@@ -1,4 +1,3 @@
-from pylab import * 
 from scipy.interpolate import RectBivariateSpline
 from scipy import odr
 from scipy.ndimage import zoom
@@ -215,25 +214,19 @@ class RingFetch:
         qmax = q_of_ring + self.q_resolution/2.
 
 #       qmin/qmax in radial pixle units
-        rmin = int( self.q2r(qmin) ) 
-        rmax = int(np.ceil( self.q2r(qmax) )) # "" ""
+        rmin = int( round(self.q2r(qmin)) ) 
+        rmax = int( round(self.q2r(qmax)) ) 
 
+        print ( 'rmin  / rmax = %d/%d'%(rmin,rmax) )
         assert( rmax < self.maximum_allowable_ring_radius)
 
         nphi_min = int( 2 * np.pi * rmin )
-        assert(nphi_min > self.num_phi_nodes)
-
-        print ( 'rmin  / rmax = %d/%d'%(rmin,rmax) )
+        assert(nphi_min >= self.num_phi_nodes)
 
 #       number of radial pixel units across ring
-        pix_per_delta_q = rmax-rmin
+        pix_per_q_node = rmax+1-rmin
 
 #       store the output
-        polar_ring_final = np.zeros((pix_per_delta_q+1,
-                                    self.num_phi_nodes ) )
-        azimuthal_values = np.zeros((pix_per_delta_q+1,
-                                    self.num_phi_nodes ) )
-
         polar_ring_final = np.zeros( self.num_phi_nodes )
         azimuthal_values = np.zeros( self.num_phi_nodes )
 
@@ -277,12 +270,12 @@ class RingFetch:
                                     for i in xrange(self.num_phi_nodes)])
  
 #           number of pixels per  phi node (bin)
-            pix_per_delta_phi = int( self.phi_resolution*( nphi / 360. ) )
+            pix_per_phi_node = int( self.phi_resolution*( nphi / 360. ) )
            
 #           index the azimuthal bins 
 #           (code vommit)
-            phi_ranges = [ (i -pix_per_delta_phi/2, \
-                        1*(pix_per_delta_phi%2) +i+pix_per_delta_phi/2 ) 
+            phi_ranges = [ (i -pix_per_phi_node/2, \
+                        1*(pix_per_phi_node%2) +i+pix_per_phi_node/2 ) 
                         for i in phi_node_index ]
 #           wrap the edges...
             phi_indices_wrapped = [ (np.arange( r1,r2)+ nphi)%nphi 
@@ -299,7 +292,7 @@ class RingFetch:
                                     phi_indices_wrapped ] )\
                                     *self.photon_conversion_factor
             
-        return azimuthal_values / (pix_per_delta_q+1.) , polar_ring_final
+        return azimuthal_values / (pix_per_q_node) , polar_ring_final
 
     def _fill_polar_ring(self, nphi ):
 #       (I am not sure but this may be important step since i think we want
