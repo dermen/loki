@@ -6,7 +6,7 @@ blue = '#348ABD'
 red = '#E24A33'
 
 import RingData
-
+#import
 
 
 # load the testing image!
