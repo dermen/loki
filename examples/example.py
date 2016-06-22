@@ -5,9 +5,7 @@ plt.style.use('ggplot')
 blue = '#348ABD'
 red = '#E24A33'
 
-import RingData
-#import
-
+from loki import RingData
 
 # load the testing image!
 img = np.load('test_img.npy')

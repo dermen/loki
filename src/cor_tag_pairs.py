@@ -6,8 +6,8 @@ import h5py
 import pandas
 import numpy as np
 
-import postproc_helper as helper
-import RingData
+from loki.utils import postproc_helper as helper
+from loki import RingData
 
 log_ret = '\x1b[80D\x1b[1A\x1b[K'
 

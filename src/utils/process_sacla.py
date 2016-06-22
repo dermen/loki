@@ -1,7 +1,7 @@
 import numpy as np
 import h5py
 import json
-from RingData import InterpSimple, DiffCorr
+from loki.RingData import InterpSimple, DiffCorr
 
 from pylab import plot,show,imshow
 

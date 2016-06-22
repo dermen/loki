@@ -8,6 +8,7 @@ import pandas
 import numpy as np
 from scipy import optimize
 from scipy.interpolate import interp1d
+from scipy.signal import argrelextrema
 
 
 def is_outlier(points, thresh=3.5):
@@ -404,4 +405,82 @@ def scherrer_pixel( qR, pixsize, detdist, wavelen, NP_diam, extra_fac=1., K=.9 )
     del_2th = K * wavelen / NP_size / np.cos(th) / extra_fac
     pix_per_del_2th = qR*del_2th
     return pix_per_del_2th
+
+
+
+def get_NP_sizes(Iphi, wavelen=1.442, q=2.668, k=0.94, rad='sphere'):
+    """
+    Iphi is an angular intensity profile with outlier Bragg peaks
+    wavelen is photon wavelength in angstroms
+    q is scattering vector in inverse angstrom
+    k is a scherrer factor (default is 0.94 for spherical NPs with cubic internals
+    rad determines which volume equation to use in determining NP width. use
+        'tetra' for tetrahedral volume, default is'sphere' for spherical volume
+    Returns the outlier NP size estimates in nanometers
+    """
+    assert( rad in ['sphere','tetra'] )
+    # scherrer params
+    th = np.arcsin( q * wavelen/ (4*np.pi) ) # bragg angle
+    cth = np.cos(th)
+    fact = k * wavelen / cth
+    
+    if rad == 'sphere':
+        rad_form = lambda beta: fact* np.power(4*np.pi/3., 1/3.) / beta
+    else:    
+        rad_form = lambda beta: fact* np.power(6, 1/3.) * np.power(2, 1/6.) / beta
+
+    d = Iphi
+
+    N = d.shape[0] # 5000
+    dphi = 2*np.pi / N
+
+    d_ = smooth( d,30,10)
+
+    x = np.linspace( 0,N, 10*N )
+
+    I = interp1d(np.arange(N), d_, bounds_error=0, 
+            fill_value=median(d_) )
+
+    dx = I(x)
+    peak_pos = np.where( is_outlier( I(x) ,3) )[0]
+    d_peaks = np.ones_like( dx)*np.median( d_ )
+
+    d_peaks[ peak_pos ] = dx[peak_pos ]
+    edge = np.zeros_like( dx)
+    edge[peak_pos] = 1
+
+    RE = np.where( np.roll(edge,-1) - edge < 0 )[0]
+    LE = np.where( np.roll(edge,1) - edge < 0 )[0]
+    mins = argrelextrema( d_peaks, np.less )[0]
+    all_mins = np.sort(hstack( (LE, RE, mins)))
+    maxs = argrelextrema( d_peaks, np.greater )[0]
+
+    diams = []
+    for i,mx in enumerate(maxs):
+        minL = all_mins[ all_mins < mx]#[-1]
+        minR = all_mins[ all_mins > mx]#[0]
+        if minL.size ==0 or minR.size ==0:
+            continue
+        minL = minL[-1]
+        minR = minR[0]
+        a = np.arange(minL, minR)
+        ydata = d_peaks[a]
+        xdata = x[a]
+        mu = x[mx]
+        offset = np.median(d_)
+        var = np.sqrt(10.)
+        gfit = fit_gauss_fixed_mu_fixed_off(ydata, xdata, mu, var, offset)
+        if gfit is None:
+            continue
+        gvar = gfit[0][1]
+        width = 2*np.sqrt(2*log(2)) * np.sqrt(gvar)
+        beta = width*dphi
+        radius = rad_form(beta)
+        diam_nm = radius/5
+        if np.isnan(diam_nm):
+            continue
+        diams.append(diam_nm)
+    
+    return diams
+
 

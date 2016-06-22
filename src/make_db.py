@@ -9,7 +9,7 @@ import numpy as np
 from scipy import optimize
 from scipy.signal import argrelextrema
 
-import postproc_helper as helper
+from loki.utils import postproc_helper as helper
 
 log_ret = '\x1b[80D\x1b[1A\x1b[K'
 

@@ -5,7 +5,7 @@ import json
 import pandas
 import numpy as np
 
-from postproc_helper import is_outlier
+from loki.utils import postproc_helper as helper
 
 class MakeTagPairs:
     def __init__(self, db_pickle, nphi, fixed_qr=False, qrmin=None, 
@@ -107,7 +107,7 @@ class MakeTagPairs:
             self._group_shots_by_peakpos()
 
     def _drop_shotmean_outliers(self, thresh):
-        outliers = is_outlier( self.df.shot_mean.values, thresh )
+        outliers = helper.is_outlier( self.df.shot_mean.values, thresh )
         where_outliers = np.where(outliers)[0]
         if where_outliers.size:
             n_total = len(self.df)
