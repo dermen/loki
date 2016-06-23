@@ -24,7 +24,7 @@ mask = np.load( 'test_mask.npy' )
 
 # this is an approximate radial profile because the center is inaccurate
 RP = RingData.RadialProfile( center_guess, 
-                        img_shape=img.shape, mask=mask, minlength=1900  ) 
+                        img_shape=img.shape, mask=mask, minlength=200  ) 
 radial_profile = RP.calculate(img )
 
 ###################
@@ -46,10 +46,11 @@ ring_param_guess = ( center_guess[0], center_guess[1], peak_radius_guess )
 
 # use the guessed paraemters to optimize the center coordinate
 RF = RingData.RingFit(img)
-x_center,y_center,peak_radius = RF.fit_circle( ring_param_guess, 
-                                num_fitting_pts=20, 
-                                ring_width=10, num_high_pix=2 )
-
+x_center,y_center,peak_radius = RF.fit_circle_slow( ring_param_guess, 
+                                            ring_scan_width=4, 
+                                            center_scan_width=4, 
+                                            resolution=.1 )
+                                 
 fig2 = plt.figure(2)
 plt.subplot(121)
 ax = plt.gca()
@@ -65,7 +66,7 @@ ax = plt.gca()
 ax.set_xticks( [] )
 ax.set_yticks( [] )
 # zoom in (thats what the 125/ 175 business is doing, nevermind it
-ax.imshow(img[125:175,125:175], cmap='hot', interpolation='nearest')
+ax.imshow( img[125:175,125:175], cmap='hot', interpolation='nearest')
 circ = plt.Circle( xy=(x_center-125, y_center-125), radius=peak_radius, 
                 ec='c', lw=2, fc='none', ls='dashed' ) 
 ax.add_patch(circ)
@@ -129,9 +130,8 @@ RingFetch = RingData.RingFetch( x_center, y_center, img, mask=mask,
                         photon_conversion_factor=photon_conversion_factor)
 phis, ring = RingFetch.fetch_a_ring( interesting_peak_radius)
 
-
 fig4 = plt.figure(4)
-plt.plot( phis, ring * photon_conversion_factor, lw=3, color=blue )
+plt.plot( phis, ring , lw=3, color=blue )
 ax = plt.gca()
 ax.tick_params(which='both', labelsize=12, length=0)
 ax.set_xlabel(r'$\phi\,\,(0-2\pi)$', fontsize=12, labelpad=10 )
@@ -139,7 +139,4 @@ ax.set_ylabel(r'Photon counts', fontsize=12, labelpad=15)
 ax.grid(lw=1, alpha=0.5, color='#777777', ls='--' )
 ax.set_axis_bgcolor('w')
 ax.set_xlim(0,2*np.pi)
-
-
-
 plt.show()
