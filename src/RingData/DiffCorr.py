@@ -24,7 +24,7 @@ class DiffCorr:
         n = ar.shape[-1]
         axis = len( ar.shape) -1
         fx = np.fft.rfft( ar, n = n, axis=axis )
-        return np.fft.irfft( fx* conjugate( fx), n = n,axis=axis)
+        return np.fft.irfft( fx* np.conjugate( fx), n = n,axis=axis)
 
     def autocorr(self): #,num_high=0,num_low=0):
         '''
