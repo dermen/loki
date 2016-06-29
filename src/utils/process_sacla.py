@@ -336,4 +336,4 @@ def make_mpccd_mask( mpccd_img, border_pad=10, mask_val=0):
         mask = mask* np.roll(mask_template, i, axis=0)
         mask = mask* np.roll(mask_template, -i, axis=0)
 
-    return mask
+    return mask.astype(bool)
