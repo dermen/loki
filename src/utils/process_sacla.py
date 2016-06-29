@@ -300,68 +300,40 @@ def interpolate_run3 ( img_gen, tags, mask, x_center, y_center,
     
     return prefix + '.hdf5'
 
-
-def correlate_polar_images( data_hdf_fname, tag_map_fname, outfile, tag_pairs_fname=None ):
+def make_mpccd_mask( mpccd_img, border_pad=10, mask_val=0):
     """
-    data_hdf_fname,     string, hdf5 file name, hdf data file returned by interpolate_run 
-    tag_map_fname,      sting, JSON file name,  tag map file returned by interpolate_run
-    outfile,            string, where to store the output
-    tag_pairs_fname,    string, JSON file name, contains a list of exposure tag pairs,
-                                                and each pair will be loaded, and subtracted
+    Description
+    ===========
+    Creates a mask for the MPCCD. By default the 
+    masked pixels have value `mask_val` on the
+    raw image. 
+
+    Parameters
+    ==========
+    `mpccd_img`    The img that the mask will be made for
+
+    `border_pad`    Add a square border of this length
+                    each masked pixel
+
+    `mask_val`    In the raw `mpccd_img`, the masked values will be
+                represented by this value (e.g. 0 or -1)
+
+
+
+    Return
+    ======
+    `mask`    A boolean mask value with True/False for
+            masked/unmasked values
     """
 
-#   load the polar data
-    data_hdf = h5py.File( data_hdf_fname )
+    mask_template = np.ones_like( mpccd_img)
+    mask_template[ mpccd_img == mask_val ] = 0
+    
+    mask = mask_template.copy()
+    for i in xrange( border_pad):
+        mask = mask* np.roll(mask_template, i, axis=1)
+        mask = mask* np.roll(mask_template, -i, axis=1)
+        mask = mask* np.roll(mask_template, i, axis=0)
+        mask = mask* np.roll(mask_template, -i, axis=0)
 
-    polar_data = data_hdf['normalized_polar_data'][:10] #.value
-    polar_mask = data_hdf['polar_mask'].value
-    q_map  = { i: val for i,val in data_hdf[ 'q_mapping'].value }
-    nphi = data_hdf['num_phi'].value
-    nq = len( q_map)
-
-###############################
-#                             #
-#   PROCESS POLAR DATA HERE   #
-#                             # 
-    #norm = np.ma.masked_equal( polar_data*polar_mask,0).mean(1).mean(1)
-    #norm = norm[:,None,None] #expand dimensions
-    #polar_data = polar_data / norm
-###############################
-
-#   load out map
-    tag_map = json.load( open( tag_map_fname) )
-
-    if tag_pairs_fname is not None:
-#       load the exposure tag pairs
-        tag_pairs = json.load( open( tag_pairs_fname ))
-        exposure_diffs = [] 
-        for i_, tags in enumerate( tag_pairs):
-            tagA, tagB = tags
-            try: indxA = tag_map[ tagA]
-            except KeyError: continue
-            try: indxB = tag_map[ tagB]
-            except KeyError: continue
-            shotA = polar_data[ indxA ]
-            shotB  = polar_data[ indxB]
-            exposure_diffs.append( shotA - shotB )
-        exposure_diffs = np.vstack( exosure_diffs ) 
-        DC = DiffCorr( exposure_diffs ) 
-    else:
-        DC = DiffCorr( polar_data, pre_dif=False, delta_shot=2)
-#   take the autocorrelation of each pair
-    cor = DC.autocorr(num_high=10)
-#################################
-#                               #
-#   PROCESS CORRELATIONS HERE   #
-#                               #
-#################################
-#   take the mean over pairs
-    cor_m = cor.mean(0)
-
-    output_hdf = h5py.File( outfile, 'w')
-    #output_hdf.create_dataset( 'all_cor', data=cor)
-    output_hdf.create_dataset( 'ave_cor', data=cor_m)
-    if tag_pairs_fname is not None:
-        output_hdf.create_dataset( 'tag_pairs', data=tag_pairs)
-    output_hdf.close()
-
+    return mask
