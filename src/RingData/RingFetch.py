@@ -94,6 +94,7 @@ class RingFetch:
 
     def _make_output_containers(self):
         self.polar_ring_output = np.zeros( self.num_phi_nodes )
+        self.polar_ring_mask_output = np.zeros( self.num_phi_nodes )
         self.azimuthal_values = np.zeros( self.num_phi_nodes )
 
     def _define_radial_extent_of_ring(self, ring_radius):
