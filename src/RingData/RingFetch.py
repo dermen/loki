@@ -177,66 +177,69 @@ class RingFetch:
             self.polar_ring_mask = polar_mask[0]
             self._fill_polar_ring()
   
-    def _fill_polar_ring( self, overlap_percentage=0.2,
-                            sample_width=20 ):
-        self.sample_width = sample_width
-        self.ring_vals = self.polar_ring*(self.polar_ring_mask.astype(float))
-        self.n_overlap = int( overlap_percentage* self.nphi)
-        
-        self._extend_periodic_ring()
-        self._find_mask_edge_indices()
+    def _fill_polar_ring( self ):
+        """sample_width in degrees"""
+        self.sample_width = int( round( self.nphi * 10*self.phi_resolution / 360. ))
+        assert( self.sample_width > 1 ) 
+        self._find_gap_indices()
         self._set_left_and_right_edge_indices()
         self._iterate_over_masked_regions()
-        self._update_masked_region()
 
-    def _extend_periodic_ring(self):
-#       in this way we can eliminate edge effects, because the ring is periodic
-        self.vals = np.zeros(self.nphi + 2*self.n_overlap)
-        self.vals[ self.n_overlap: self.nphi+self.n_overlap  ] = self.ring_vals
-        self.vals[:self.n_overlap] = self.ring_vals[-self.n_overlap:]
-        self.vals[-self.n_overlap:] = self.ring_vals[:self.n_overlap]
-
-    def _find_mask_edge_indices(self):
-        is_an_edge = np.logical_xor( self.vals, 
-                                np.roll( self.vals, 1) )
-        self.mask_edge_indices = np.where( is_an_edge ) [0] 
+    def _find_gap_indices(self):
+        mask = self.polar_ring_mask.astype(bool)
+        mask_rolled_right = np.roll( mask,1)
+        mask_rolled_left = np.roll( mask,-1)
+        
+        is_start_of_gap = (mask ^ mask_rolled_left ) & mask
+        is_end_of_gap = (mask ^ mask_rolled_right ) & mask
+        
+        self.gap_start_indices = np.where(is_start_of_gap)[0]
+        self.gap_end_indices = np.where( is_end_of_gap)[0]
         
     def _set_left_and_right_edge_indices(self):
-        if self.vals[0] == 0: # if mask is near the endpoints of the extended ring
-            self.left_edges = self.mask_edge_indices[2::2]
-            self.right_edges = self.mask_edge_indices[3::2]
+        if self.polar_ring_mask[0] == 0:
+            self.gap_index_pairs = zip( self.gap_start_indices,
+                                    np.roll(self.gap_end_indices,-1) )
         else:
-            self.left_edges = self.mask_edge_indices[::2]
-            self.right_edges = self.mask_edge_indices[1::2]
+            self.gap_index_pairs = zip( self.gap_start_indices,
+                                      self.gap_end_indices )
 
     def _iterate_over_masked_regions(self):
-        for self.iL, self.iR in zip(self.left_edges, self.right_edges):
+        for self.iStart, self.iEnd in self.gap_index_pairs:
+            self._set_gap_size_and_ranges()
             self._get_linear_gap_interpolator()
             self._get_edge_noise()
             self._fill_in_masked_region_with_Gaussian_noise()
     
+    def _set_gap_size_and_ranges(self):
+        if self.iEnd < self.iStart:
+            self.gap_size = self.iEnd + self.nphi - self.iStart
+            self.interpolation_range = np.arange( self.iStart,  self.iEnd + self.nphi )
+        else:
+            self.gap_size = self.iEnd-self.iStart
+            self.interpolation_range = np.arange( self.iStart, self.iEnd)
+
     def _get_linear_gap_interpolator(self):
 #       estimate the edge means
-        left_mean = self.vals[self.iL-self.sample_width:self.iL].mean()
-        right_mean = self.vals[self.iR:self.sample_width+self.iR].mean() 
+        left_mean = self.polar_ring[self.iStart-self.sample_width:self.iStart].mean()
+        right_mean = self.polar_ring[self.iEnd+1:self.sample_width+self.iEnd+1].mean() 
+
 #       find the equation of line connecting edge means
-        slope = (right_mean - left_mean) / (self.iR - self.iL)
-        self.line = lambda x : slope* ( x-self.iL ) + left_mean
+        slope = (right_mean - left_mean) / self.gap_size
+        self.line = lambda x : slope* ( x-self.iStart ) + left_mean
     
     def _get_edge_noise(self):
 #       estimate the edge noise 
-        left_dev = self.vals[self.iL-self.sample_width:self.iL].std() 
-        right_dev = self.vals[self.iR:self.sample_width+self.iR].std() 
-        self.edge_noise = (left_dev + right_dev) / np.sqrt(2)
+        left_dev = self.polar_ring[self.iStart-self.sample_width:self.iStart].std() 
+        right_dev = self.polar_ring[self.iEnd+1:self.sample_width+self.iEnd+1].std() 
+        self.edge_noise = (left_dev + right_dev) / 2. #np.sqrt(2)
 
     def _fill_in_masked_region_with_Gaussian_noise(self):
 #       fill in noise about the line
-        gap_range = np.arange( self.iL, self.iR )
-        gap_vals = np.random.normal( self.line(gap_range), self.edge_noise)
-        self.vals[gap_range] = gap_vals
+        gap_range = self.interpolation_range % self.nphi
+        gap_vals = np.random.normal( self.line(self.interpolation_range), self.edge_noise)
+        self.polar_ring[gap_range] = gap_vals
 
-    def _update_masked_region(self):
-        self.polar_ring = self.vals[ self.n_overlap:self.n_overlap+self.nphi]
 
 
 class InterpSimple:
