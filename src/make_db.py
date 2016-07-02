@@ -1,3 +1,5 @@
+#AUTHOR: dermen dermendarko@gmail.com
+
 import sys
 import os
 import re
@@ -13,90 +15,89 @@ from loki.utils import postproc_helper as helper
 
 log_ret = '\x1b[80D\x1b[1A\x1b[K'
 
-class MakeDatabase:
-    def __init__(self, data_fname, tag_map_fname, run, 
-                    pk_pos=None, pk_detect=True):
-        """
-        'data_fname' is a file path which contains 
-            output from process_sacla.interpolate_run
-        
-        'tag_map_fname' is a json file output from 
-            process_sacla.interpolate_run
-        
-        'run' string indicating the experimental run
 
-        'pk_pos' is where to look on each 
-            interpolated image in q to parametrize 
-            the exposures using polynomial fits, 
-            in relative pixel units (e.g. 0 corresponds 
-            to qmin in polar image). Default is None, 
-            in which case peak detection is performed.
-        
-        'pk_detect' is whether or not to check for peaks 
-            each exposure and manually set pk_pos. 
-            If True, then pk_pos is ignored
+class MakeDatabase:
+    def __init__(self, data_fname, run, 
+                    pk_radius=None, pk_detect=True):
         """
-        self.pk_pos = pk_pos
+        'data_fname'    is a file path which contains 
+                        output from process_sacla.interpolate_run
+        
+        'run'           string indicating the experimental run
+
+        'pk_radius'        is where to look on each 
+                        interpolated image in q to parametrize 
+                        the exposures using polynomial fits, 
+                        in pixel units. Default is None, 
+                        in which case peak detection is performed.
+        
+        'pk_detect'     is whether or not to check for peaks in 
+                        each exposure and manually set pk_pos per shot. 
+                        If True, then pk_pos is ignored
+        """
+        
+        self.pk_radius = pk_radius
+        if self.pk_radius is not None:
+            assert( not pk_detect )
         
         assert( os.path.exists( data_fname) )
-        assert( os.path.exists( tag_map_fname) )
-        print "\nWill load interpolation data from %s.."%data_fname
-        print "Will load tag mapping from  %s.."%tag_map_fname
-        print "Will use %s as the run tag"%run
+        print ("\nWill load interpolation data from %s.."%data_fname)
+        print ("Will use %s as the run tag."%run)
 
         self.run = run
-        
         self.data_fname = data_fname
-        self.tag_map_fname = tag_map_fname
+        
         self.pk_detect = pk_detect
         if not self.pk_detect:
-            assert(pk_pos is not None)
-            print "will not detect peaks, instead will use %d as"%pk_pos,\
-                    "relative peak position."
+            assert(self.pk_radius is not None)
+            print ("will not detect peaks, instead will use qRadius %d as"%pk_radius,\
+                    "\n position for fitting polynomials.")
         else:
-            print "Will be using peak detection..."
+            print ("Will be using peak detection... to fit polynomials")
+        
         self._load_data_file()
-        self._load_tag_map()
         self._init_lists()
 
     def _load_data_file(self):
         """ load data from process_sacla.interpolate_run
         hdf5 file"""
         data = h5py.File( self.data_fname, 'r')
-        self.pd = data['polar_data']
+        self.rings = data['ring_intensities']
+        self.nshots = len(self.rings)
         self.pmask = data['polar_mask'].value
-        self.nphi = data['num_phi'].value
-        self.qs = data[ 'q_mapping'][:,1]
-        self.wavelen_exp = data['wavelen'].value
-        self.pixsize_exp = data['pixsize'].value
-        self.detdist_exp = data['detdist'].value
-        print "Data loaded from file %s"%self.data_fname
-        print " wavelength: %f"%self.wavelen_exp 
-        print " pixsize: %f"%self.pixsize_exp 
-        print " detdist: %f"%self.detdist_exp 
-        print " qmin=%f, qmax=%f, num_qs=%d"%(self.qs[0], 
+        self.pmask_bool = np.logical_not( self.pmask.astype(bool) )
+        self.qs = data[ 'q_mapping'].value
+        self.radii = data['q_radii'].value
+        self.wavelen = data['wavelen'].value
+        self.pixsize = data['pixsize'].value
+        self.detdist = data['detdist'].value
+        self.detgain = data['detgain'].value
+        self.photon_factor = data['photon_factor'].value
+        self.phi_res = data['phi_resolution'].value
+        self.q_res = data['q_resolution'].value
+        self.num_phi = data['num_phi'].value
+        self.x_center = data['x_center'].value
+        self.y_center = data['y_center'].value
+        
+
+        if self.pk_radius is not None:
+            assert( self.pk_radius in self.radii )
+            self.pk_pos = np.where( self.radii == self.pk_radius)[0][0]
+        else:
+            self.pk_pos = None
+        
+
+        print ("Data loaded from file %s"%self.data_fname)
+        print (" qmin=%f, qmax=%f, num_qs=%d"%(self.qs[0], 
                                             self.qs[-1], 
-                                            len(self.qs))
-        print " total number of shots: %d"%self.pd.shape[0]
+                                            len(self.qs)))
+        print (" total number of shots: %d"%self.nshots)
 
-
-    def _load_tag_map(self):
-        """
-        load info from process_sacla.interpolate_run
-        json file
-        """
-        # tag:index pairs corresponding to self.pd
-        self.tags_inds = json.load(open(self.tag_map_fname, 'r'))
-        # switch the keys/tags
-        self.inds_tags = { ind:tag
-                for tag,ind in self.tags_inds.iteritems() } 
-        print "Loaded tag mapping from %s."%self.tag_map_fname
-
+    
     def _init_lists(self):
         """Initialize some lists"""
-        print "Initializing database list containers..."
+        print ("Initializing database list containers...")
         # shot ID lists (indices and tads of the shots)
-        self.all_shot_index = []
         self.all_shot_tag = []
         
         # shot global parameters e.g. mean intensity
@@ -105,13 +106,23 @@ class MakeDatabase:
         self.all_shot_stdev = []
         self.all_shot_sum = []
         
-        # if detecting Bragg rings on shot by shot basis
-        self.all_pk_inds = [] # each detected peak
-        self.all_pk_amp = [] # fitted amplitude of peak
-        self.all_pk_offset = [] # fitted offset of peak
-        self.all_pk_width = [] # fitted width of peak
-        self.all_pk_pos = [] # maximum paek from pk_inds
-         
+
+
+#       if detecting Bragg rings on shot by shot basis
+        if self.pk_detect:
+    
+            self.all_pk_inds = [] # each detected peak
+            self.all_pk_amp = [] # fitted amplitude of peak
+            self.all_pk_offset = [] # fitted offset of peak
+            self.all_pk_width = [] # fitted width of peak
+            self.all_pk_pos = [] # maximum paek from pk_inds
+        else:
+            self.all_pk_inds = None # each detected peak
+            self.all_pk_amp = None # fitted amplitude of peak
+            self.all_pk_offset = None # fitted offset of peak
+            self.all_pk_width = None # fitted width of peak
+            self.all_pk_pos = self.pk_pos # maximum paek from pk_inds
+
         # for storing the polynomial coefficients
         # for removing peaks prior to correlating
         self.all_chebyfit_pkremove = [] 
@@ -136,10 +147,11 @@ class MakeDatabase:
         self.pk_fit_extent = pk_fit_extent
         self.pk_fit_width = pk_fit_width
         self.remove_spots = remove_spots
+        
         if self.remove_spots:
-            print "Will remove bright spots on each angular profile."
+            print( "Will remove bright spots on each angular profile.")
         else:
-            print "Will not remove bright spots on angular profile."
+            print ("Will not remove bright spots on angular profile.")
 
         self.spot_thresh = spot_thresh
         self.spot_extent = spot_extent
@@ -151,17 +163,19 @@ class MakeDatabase:
         self._save_dataframe(save_name)
 
     def _iterate_shots(self):
-        """ iterate over all shots in self.pd """
-        nshots = self.pd.shape[0]
-        for shot_ind,shot in enumerate(self.pd):
+        """ iterate over all shots in self.rings """
+        for shot_ind, shot_tag in enumerate(self.rings):
             print "%sParameterizing exposures ( %d/%d )"%(log_ret,
-                                            shot_ind+1,nshots)
+                                            shot_ind+1,self.nshots)
 
-            self.all_shot_index.append(shot_ind)
-            self.all_shot_tag.append(self.inds_tags[shot_ind])
+            shot_rings = self.rings[shot_tag].value
+            
+            self.all_shot_tag.append(shot_tag)
            
-            # the masked polar image 
-            self.shot_ma = np.ma.masked_equal(shot*self.pmask,0)
+            # the masked polar image
+            self.shot_ma = np.ma.masked_array(data=shot_rings, 
+                                            mask=self.pmask_bool)
+            
             self._get_shot_global_params()
 
             # the radial profile of the polar image
@@ -184,8 +198,8 @@ class MakeDatabase:
         store some global shot parameters using a masked
         array
         """
-        #print "  Storing global parameters..."
 #       all quantities take into account the mask
+        
         self.all_shot_mean.append(self.shot_ma.mean())
         self.all_shot_stdev.append(self.shot_ma.std())
         self.all_shot_sum.append(self.shot_ma.sum())
@@ -195,10 +209,8 @@ class MakeDatabase:
         detect bragg ring positions and fit Gaussian to 
         the strongest detected peak
         """
-        #print " Beginning the peak detection..."
         # find the Bragg ring positions
         pk_inds = self._find_peaks()
-        #print "  Found %d peak(s) in radial profile"%pk_inds.size
         # set initial values
         pk_amp = None
         pk_width = None
@@ -243,8 +255,6 @@ class MakeDatabase:
         """ 
         fit a Gaussian to the Bragg Ring profile in I(q) 
         """
-        #print " Fitting a Gaussian to brightest peak"
-        # extent of the radial peak profile (the peak in I(q) )
         x1 = self.pk_pos - self.pk_fit_extent
         x2 = self.pk_pos + self.pk_fit_extent
         xdata = np.arange(x1,x2)
@@ -264,7 +274,6 @@ class MakeDatabase:
         """ 
         fit polynomials to the ring profile I(q=pk_pos, phi)
         """
-        #print " Doing the polynomial fitting..."
         # interpolate the angular profile from the polar image
         norm, ring, mask = helper.get_ring(
                     pdata=self.shot_ma.data, 
@@ -315,13 +324,12 @@ class MakeDatabase:
         self.all_chebyfit_compare.append([])
     
     def _make_datadict(self):
-        print "Making the database hash table..."
-        self.df_dict = {'hdf5_index':self.all_shot_index,#
-                        'tag':self.all_shot_tag,#
+        print ("Making the database hash table...")
+        self.df_dict = {'tag':self.all_shot_tag,#
                         'pk_inds':self.all_pk_inds,#
                         'pk_pos':self.all_pk_pos,#
                         'pk_width':self.all_pk_width,
-                        'radial_profile':self.all_shot_rad_pro , #
+                        'ring_mean_intensities':self.all_shot_rad_pro , #
                         'pk_amp':self.all_pk_amp,#
                         'background_offset':self.all_pk_offset,#
                         'shot_mean':self.all_shot_mean,#
@@ -331,32 +339,38 @@ class MakeDatabase:
                         'cheby_fit_compare':self.all_chebyfit_compare} #
 
     def _make_dataframe(self):
-        print "Making the database object..."
+        print ("Making the database object...")
         self.df = pandas.DataFrame(self.df_dict)
-        self.df['data_filename'] = self.data_fname
-        self.df['wavelen'] = self.wavelen_exp
-        self.df['pixsize'] = self.pixsize_exp
+#       Add meta data like a boss because I can
         self.df['run'] = self.run
+        self.df['data_filename'] = self.data_fname
+        self.df['wavelen'] = self.wavelen
+        self.df['pixsize'] = self.pixsize
+        self.df['detdist'] = self.detdist
+        self.df['detgain'] = self.detgain
+        self.df['photon_factor'] = self.photon_factor
+        self.df['phi_resolution'] = self.phi_res 
+        self.df['q_resolution'] = self.q_res
+        self.df['num_phi'] = self.num_phi
+        self.df['x_center'] = self.x_center
+        self.df['y_center'] = self.y_center
+        self.df['radii'] = [self.radii for i in xrange(self.nshots)] 
 
     def _save_dataframe(self, db_fname):
         self.df.to_pickle(db_fname)
-        print "Database saved as a pandas pickle: %s"%db_fname
-#dermen
+        print ("Database saved as a pandas pickle: %s\n"%db_fname)
 
 if __name__=='__main__':
-    pdata_f = "/data/sacla_gold_Feb2014/interped_178802.hdf5"
-    map_f = "/data/work/mender/interped_178802.json"
-    output_f = "/data/work/mender/interped_178802.pkl" 
-    
-#   run number from file name
-    run_str = re.findall( '_[0-9]{6}', pdata_f )[0]
-    run = run_str.split('_')[1]
-    
+    pdata_f = "179210_rings_5.hdf5"
+    output_f = "test.pkl" 
+    run = '179210'
+    pk_radius = 695
+
     makeDB = MakeDatabase(pdata_f, 
-                        map_f, 
-                        run=run)
+                        run=run, 
+                        pk_radius=pk_radius, pk_detect=False)
     
-    makeDB.Make(save_name=output_f)
+    makeDB.Make(save_name=output_f, remove_spots=False)
 
 #   I haven't tried yet, but usage for DNA data would be the following
  
@@ -368,5 +382,4 @@ if __name__=='__main__':
     #                    pk_pos=pk_pos)
     #makeDB.Make(save_name=output_f, 
     #               remove_spots=False)
-
 
