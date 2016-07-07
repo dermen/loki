@@ -223,6 +223,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
     assert( how in [ 'fetch', 'polar' ] )
 
     if detector_gain is None:
+        detector_gain = 1
         photon_conversion_factor=1
     else:
         photon_energy = 12398.42 / wavelen
@@ -257,7 +258,6 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
                             * photon_conversion_factor
             output_hdf.create_dataset('ring_intensities/%s'%tag, data=polar_img)
         
-        phi_values = np.arange( nphi) * 2 * np.pi / nphi
         radii = np.arange( qmin_pix, qmax_pix )
         q_vals =  np.array( [ pix2invang(q_pix)
                             for q_pix in radii ] )
@@ -274,15 +274,16 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
             
             intensities = np.zeros((len(radii), fetcher.num_phi_nodes))
             for ring_index, ring_radius in enumerate( radii):
-                phi_values, intensities[ring_index] = \
+                intensities[ring_index] = \
                             fetcher.fetch_a_ring(ring_radius)
             output_hdf.create_dataset( 'ring_intensities/%s'%tag,
                                 data = intensities )
 #       define meta parameters not specified
         q_vals = np.array( [fetcher.r2q(q_rad) for q_rad in radii ] )
-        nphi  = phi_values.shape[0]
+        nphi  = intensities.shape[1]
         pmask = np.ones( ( len(radii), nphi))
 
+    phi_values = np.arange( nphi) * 2 * np.pi / nphi
 #   save meta data
     output_hdf.create_dataset( 'x_center', data = x_center)
     output_hdf.create_dataset( 'y_center', data = y_center)
