@@ -50,6 +50,8 @@ class RingFetch:
 #       ... and vice versa
         self.q2r = lambda Q: np.tan( 2*np.arcsin(Q*wavelen/4/np.pi)) \
                                 *detdist/pixsize
+
+        self.r2theta = lambda R: np.arctan( R*pixsize / detdist  )/2.
     
         self.photon_conversion_factor = photon_conversion_factor
 
@@ -65,12 +67,17 @@ class RingFetch:
         assert ( img.shape == self.img.shape )
         self.img = img
 
-    def fetch_a_ring(self, ring_radius):
+###############
+# MAIN METHOD #
+###############
+    def fetch_a_ring(self, ring_radius, solid_angle=True):
         '''
         Parameters
         ==========
         
         `ring_radius` is radius of ring in pixel units
+
+        `solid_angle` is whether or not to do the solid angle correction
 
         Returns
         =======
@@ -84,18 +91,14 @@ class RingFetch:
             effective pixels
         '''
         
-        self._make_output_containers()
         self._define_radial_extent_of_ring(ring_radius)
         self._check_ring_edges()
+        self._make_output_containers()
         self._iterate_across_ring_extent()
-        
-        return self.azimuthal_values / (self.rmax+1-self.rmin) , \
-                self.polar_ring_output
-
-    def _make_output_containers(self):
-        self.polar_ring_output = np.zeros( self.num_phi_nodes )
-        self.polar_ring_mask_output = np.zeros( self.num_phi_nodes )
-        self.azimuthal_values = np.zeros( self.num_phi_nodes )
+        if solid_angle:
+            self._solid_angle_correction()
+        self._adjust_fractional_rings()
+        return self.ring_output.sum(0)
 
     def _define_radial_extent_of_ring(self, ring_radius):
         q_of_ring = self.r2q(ring_radius)
@@ -104,69 +107,46 @@ class RingFetch:
 #       max q for ring at desired resolution
         qmax = q_of_ring + self.q_resolution/2.
 #       qmin/qmax in radial pixle units
-        self.rmin = int( round(self.q2r(qmin)) ) 
-        self.rmax = int( round(self.q2r(qmax)) ) 
+        self.rmin = self.q2r(qmin)
+        self.rmax = self.q2r(qmax)
+        assert( self.rmax-1. > self.rmin)
+        
+        self.radii = np.arange( int(self.rmin), int(self.rmax)+1 )
+        self.nrad = len( self.radii)
 
     def _check_ring_edges(self):
         nphi_min = int( 2 * np.pi * self.rmin )
         assert(nphi_min >= self.num_phi_nodes)
-        assert( self.rmax < self.maximum_allowable_ring_radius)
+        assert( int(self.rmax)+1 < self.maximum_allowable_ring_radius)
+    
+    def _make_output_containers(self):
+        self.ring_output = np.zeros( ( self.nrad, self.num_phi_nodes) )
 
     def _iterate_across_ring_extent(self):
-        for radius_index, radius in enumerate( xrange(self.rmin, self.rmax+1)):
+        for self.rad_ind, radius in enumerate( self.radii):
 #           number of azimuthal points in radial image
             self.nphi = int( 2*np.pi*radius) 
-
-#           make the RingData interpolator object
-#           (The trick here is that we interpolate the image at single
-#           pixel precision (hence nphi = 2*pi*radius) and we only
-#           inteprolate a ring that is 1 pixel wide at given radius.
-#           In this way we follow the resolution of the detector as
-#           we iterate across the ring
-            self.InterpSimp = InterpSimple( self.a, self.b, radius+1,
+            self.InterpSimp = InterpSimple(self.a, self.b, radius+1,
                                 radius, self.nphi, raw_img_shape=self.img.shape)
-
             self._set_polar_ring()
             self._fill_in_masked_values()
-            
-            self.pix_per_azimuthal_node = int( self.phi_resolution*( self.nphi / 360. ) )
-            self._set_index_of_azimuthal_node_centers()
-            self._set_indices_of_pixels_in_azimuthal_nodes()
+            self._sum_intensity_in_azimuthal_nodes()
 
-            self._accumulate_azimuthal_values_in_radians()
-            self._accumulate_values_in_nodes()
 
-    def _set_index_of_azimuthal_node_centers(self):
-            node_edge_index = np.linspace(0, self.nphi, 
-                                    self.num_phi_nodes+1, endpoint=1 )
-            node_edge_index = node_edge_index.astype(int)
-
-#           take the center of the ndoe as the index
-            self.azimuthal_node_index =np.array( [ int(.5*node_edge_index[i] + 
-                                            .5*node_edge_index[i+1]) 
-                                    for i in xrange(self.num_phi_nodes)])
- 
-    def _set_indices_of_pixels_in_azimuthal_nodes(self): 
-            half_node = self.pix_per_azimuthal_node / 2
-            even_or_odd_term = 1*(self.pix_per_azimuthal_node%2)
-            node_edges = [ (i-half_node, even_or_odd_term + i + half_node ) 
-                            for i in self.azimuthal_node_index ]
-#           wrap the edges...
-            self.node_indices_wrapped = [ (np.arange( r1,r2)+ self.nphi)%self.nphi 
-                                    for r1,r2 in node_edges ]
-
-    def _accumulate_values_in_nodes(self):
-        self.polar_ring_output +=  \
-                        np.array(\
-                            [ sum(self.polar_ring[ indices ]) 
-                            for indices in 
-                            self.node_indices_wrapped ]\
-                            ) * self.photon_conversion_factor
+    def _solid_angle_correction(self):
+        theta_vals = self.r2theta(self.radii)
+        solid_angle_per_radii = np.cos( theta_vals) **3
+        self.ring_output *= solid_angle_per_radii[:,None]
     
-    def _accumulate_azimuthal_values_in_radians(self):
-        self.azimuthal_values += np.arange(self.nphi)\
-                                [self.azimuthal_node_index]*2*np.pi/self.nphi
-  
+    def _adjust_fractional_rings(self):
+        start_factor = 1. - self.rmin + np.floor( self.rmin)
+        stop_factor = self.rmax - np.floor( self.rmax )
+        self.ring_output[0] *= start_factor
+        self.ring_output[-1] *= stop_factor
+        
+################################
+# RING RADII ITERATION METHODS #
+################################
     def _set_polar_ring(self):
         polar_img = self.InterpSimp.nearest(self.img)
         self.polar_ring = polar_img[0]
@@ -178,6 +158,27 @@ class RingFetch:
             self.polar_ring_mask = polar_mask[0]
             self._fill_polar_ring()
   
+    def _sum_intensity_in_azimuthal_nodes(self):
+            node_edges = np.linspace(0, self.nphi, self.num_phi_nodes+1) # fractional pixels
+            node_inds = node_edges.astype(int)
+            frac_start = (1 - node_edges + np.floor(node_edges))[:-1]
+            frac_stop = (node_edges - np.floor(node_edges))[1:]
+            for i in xrange(self.num_phi_nodes-1):
+                start = node_inds[i]
+                stop = node_inds[i+1]
+                summed_intens = self.polar_ring[start] * frac_start[i] \
+                                + np.sum(self.polar_ring[start+1:stop])\
+                                + self.polar_ring[stop] * frac_stop[i]
+                self.ring_output[self.rad_ind,i] += summed_intens \
+                                            * self.photon_conversion_factor
+            start = node_inds[-2]
+            self.ring_output[self.rad_ind, -1] += (self.polar_ring[start] * frac_start[-1] \
+                                            + np.sum(self.polar_ring[start+1:]))\
+                                            * self.photon_conversion_factor
+    
+########################################
+# METHODS FOR FILLLING IN MASKED REGIONS
+########################################
     def _fill_polar_ring( self ):
         """sample_width in degrees"""
         self.sample_width = int( round( self.nphi * 10*self.phi_resolution / 360. ))
@@ -238,7 +239,8 @@ class RingFetch:
     def _fill_in_masked_region_with_Gaussian_noise(self):
 #       fill in noise about the line
         gap_range = self.interpolation_range % self.nphi
-        gap_vals = np.random.normal( self.line(self.interpolation_range), self.edge_noise)
+        gap_vals = np.random.normal( self.line(self.interpolation_range), 
+                                    self.edge_noise)
         self.polar_ring[gap_range] = gap_vals
 
 
