@@ -9,5 +9,6 @@ setup(
     author_email='dermendarko@gmail.com',
     url='https://github.com/dermen/loki',
     packages=['loki', 'loki.RingData', 'loki.utils'],
-    package_dir={'loki':'src'}
+    package_dir={'loki':'src'},
+    scripts = ['scripts/loki.queryRingIndices']
     )

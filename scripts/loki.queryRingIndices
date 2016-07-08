@@ -1,0 +1,91 @@
+#!/usr/bin/env python2.7
+import h5py
+from argparse import ArgumentParser
+import os
+
+import numpy as np
+from scipy import spatial
+
+
+class PolarTree:
+    def __init__(self, a,b, img_shape, offset_pix = False):
+        self.img_shape = img_shape
+        self._define_polar_indices(a,b,offset_pix)
+        self._create_the_tree()
+        
+    def _define_polar_indices(self,a,b,offset_pix):
+        Y,X = np.indices( self.img_shape)
+        if offset_pix:
+            a += 0.5
+            b += 0.5
+            X += 0.5
+            Y += 0.5
+        R = np.sqrt( (X-a)**2 + (Y-b)**2 )
+        R = np.round( R, 0) # for some reason this is a heck of a lot faster when R is rounded..
+                            # I am unsure of the consequences, probable some rounding errors...
+        PHI = np.arctan2( Y-b, X-a )
+        self._points = zip( R.ravel(), PHI.ravel() )
+    
+    def _create_the_tree(self):
+        print ("Making the K-D tree...")
+        self.tree = spatial.cKDTree( self._points)
+
+    def set_working_image(self, img):
+        assert( img.shape == self.img_shape)
+        self.img_flat = img.ravel()
+
+    def mean_nearest_k( self, points, k):
+        inds =  self.tree.query( points, k=k)[1]
+        return self.img_flat[inds].mean(1)
+    
+    def weighted_nearest_k( self, points, k):
+        weights, inds =  self.tree.query( points, k=k)
+        weights /= dists.sum(1)[:,None]
+        return np.average( self.img[inds], axis=1, weights=weights) 
+
+########
+# ARGS #
+########
+parser = ArgumentParser(description='Uses a K-D-Tree to map out indices of intensity rings and saves them to an .hdf5 file')
+parser.add_argument("-o", "--outputDir", type=str, dest="outputDir", 
+                help="Where to store the output data.",required=True)
+parser.add_argument( '-X', '--fast-dim', type=int,
+        dest='X', help='fast image dimension' )
+parser.add_argument( '-Y', '--slow-dim', type=int,
+        dest='Y', help='slow image dimension' )
+parser.add_argument( '-rmax', '--maximum-radius',  type=int, dest='rmax', 
+     help='largest r where ring indices will be computed' )
+parser.add_argument( '-p', type=str, dest='prefix', 
+     help='path of output file without a file suffix' )
+parser.add_argument( '-cf','--center-file', type=str, 
+    dest="center_filename", 
+     help='full path to a file containing the detector center point (where the forward beam intersects the detector)' )
+
+args = parser.parse_args()
+
+#######################
+# MAKE THE INDEX DATA #
+#######################
+center  = np.load( args.center_filename )
+PT = PolarTree(center[0], center[1], img_shape=(args.Y, args.X), offset_pix=1)
+radii = np.arange(1, args.rmax)
+
+outfile_name = os.path.join( args.outputDir, "%s.hdf5"%args.prefix)
+outfile = h5py.File( outfile_name, 'w')
+
+print( "Mapping indices for the rings...")
+for i,r in enumerate( radii):
+    nphi = int( 2* np.pi * r)
+    phi_range = np.linspace( -np.pi, np.pi, nphi)
+    ring_points = zip( [r]*nphi, phi_range)
+    
+    dists, inds = PT.tree.query( ring_points,k=1)
+    dists4, inds4 = PT.tree.query( ring_points,k=4)
+
+    outfile.create_dataset( "%s/%d"%('nearest/dists',r), data=dists)
+    outfile.create_dataset( "%s/%d"%('nearest/inds',r), data=inds.astype(int))
+    outfile.create_dataset( "%s/%d"%('nearest4/dists',r), data=dists4)
+    outfile.create_dataset( "%s/%d"%('nearest4/inds',r), data=inds4.astype(int))
+
+outfile.close()
+

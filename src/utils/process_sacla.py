@@ -32,7 +32,6 @@ def getNorm( runfile, probe=True, pump=False, beam=True):
 
     intens_monit = fh5[monit_path].value
 
-
     beam_path = '/%s/event_info/acc/accelerator_status'%run_key
     pump_path ='/%s/event_info/bl_3/lh_1/laser_pulse_selector_status'%run_key
     probe_path = '/%s/event_info/bl_3/eh_1/xfel_pulse_selector_status'%run_key
@@ -130,10 +129,10 @@ def normalize_polar_images( imgs, mask_val = -1 ):
     return imgs
 
 def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
-                    detdist, wavelen, prefix, how='fetch', radii=None, 
-                    q_resolution=0, phi_resolution=0,
+                    detdist, wavelen, prefix, how='fetch', interp_method='floor', 
+                    radii=None, q_resolution=0, phi_resolution=0,
                     nphi=None, qmin=None, qmax=None, qmin_pix=None, qmax_pix=None,
-                    detector_gain=None):
+                    detector_gain=None index_query_fname=None):
      
     """
     Description
@@ -173,7 +172,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
     
     prefix       str, file prefix, include directory path if necessary
 
-    how         str, either ('fetch' or 'polar') method of interpolating the ring. 
+    how,         str, either ('fetch' or 'polar') method of interpolating the ring. 
                 
                 'fetch' is the new version, which requires q_resolution 
                         and phi_resolution parameters. Uses RingData.RingFetch. 
@@ -183,6 +182,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
 
     Required Parmeters if using 'fetch' method
     ==========================================
+    interp_method,      str, should be either ['floor', 'nearest', 'nearest4', 'weighted4' ]
     
     radii,      list, range of interesting radii on the detector
                     where one wants rings
@@ -209,6 +209,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
     
     Optional Parameters
     ===================
+    index_query_fname,    str, filename created by loki.queryRingIndices
 
     detector_gain,    float, absolute gain of detector
     
@@ -266,12 +267,14 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
         assert (phi_resolution is not None)
         assert (q_resolution is not None)
         assert( radii is not None)
-        
-        for tag in tags:
-            fetcher = RingFetch( x_center, y_center, img_gen.next(),
+       
+        fetcher = RingFetch( x_center, y_center, mask.shape,
                             mask, q_resolution, phi_resolution, wavelen,
-                            pixsize, detdist, photon_conversion_factor )
-            
+                            pixsize, detdist, photon_conversion_factor, interp_method, 
+                            index_query_fname)
+
+        for tag in tags:
+            fetcher.set_working_image(img_gen.next() )
             intensities = np.zeros((len(radii), fetcher.num_phi_nodes))
             for ring_index, ring_radius in enumerate( radii):
                 intensities[ring_index] = \
@@ -324,8 +327,7 @@ def make_mpccd_mask( mpccd_img, border_pad=10, mask_val=0):
     `mask_val`    In the raw `mpccd_img`, the masked values will be
                 represented by this value (e.g. 0 or -1)
 
-
-
+    
     Return
     ======
     `mask`    A boolean mask value with True/False for

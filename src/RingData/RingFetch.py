@@ -1,10 +1,12 @@
+import h5py
 import numpy as np
 from scipy.ndimage import zoom
 
 class RingFetch:
-    def __init__(self, a, b, img, mask=None, q_resolution=0.05, 
+    def __init__(self, a, b, img_shape, mask=None, q_resolution=0.05, 
                     phi_resolution=0.5,wavelen=1.41, pixsize=0.00005, 
-                    detdist=0.051, photon_conversion_factor=1):
+                    detdist=0.051, photon_conversion_factor=1,
+                    interp_method = 'floor', index_query_fname=None):
         '''
         Description
         ===========
@@ -17,7 +19,7 @@ class RingFetch:
         `a`, `b` is the horizontal, vertical pixel coordinate where
             forward beam intersects detector
         
-        `img` is a two-dimensional diffraction image with ring patterns
+        `img_shape` is shape of two-dimensional diffraction image
 
         `mask` is a boolean array where False,True represent masked,
             unmasked pixels in an image.
@@ -29,17 +31,37 @@ class RingFetch:
         `wavelen`, `pixsize`, `detdist` are photon-wavelength, pixel-size 
             (assuming square pixels) and sample-to-detector-distance in 
             Angstrom, meter, and meter units, respectively.
+        
+        `photon_conversion_factor`
+
+        `interp_method`
+
+        `index_query_fname`
         '''
         
         self.a = a
         self.b = b
-        self.img = img
+        self.img_shape = img_shape
         self.q_resolution = q_resolution
         self.phi_resolution = phi_resolution
+        assert( interp_method in ['floor', 'nearest' , 'nearest4', 'weighted4'] )
+        self.method = interp_method
+        
         self.num_phi_nodes =  int ( 360.  / self.phi_resolution)
 
+        if self.method in ['nearest' , 'nearest4', 'weighted4']:
+            assert( index_query_fname is not None )
+            query_file = h5py.File( index_query_fname, 'r')
+            self._max_radius_in_query_data = max( map( int,  query_file['nearest/dists'].keys() ))
+            if self.method == 'nearest':
+                self.index_data = query_file['nearest']
+            else:
+                self.index_data = query_file['nearest4']
+
         if mask is not None:
-            assert(mask.shape == self.img.shape)
+            assert(mask.shape == self.img_shape)
+            if self.method != 'floor':
+                self._mask_flat = mask.ravel()
         self.mask = mask
        
         self._set_max_ring_radius()
@@ -55,17 +77,19 @@ class RingFetch:
     
         self.photon_conversion_factor = photon_conversion_factor
 
+
     def _set_max_ring_radius(self):
-        possible_max_radii = (self.img.shape[1] - self.a, 
+        possible_max_radii = (self.img_shape[1] - self.a, 
                               self.a , 
-                              self.img.shape[0]-self.b, 
+                              self.img_shape[0]-self.b, 
                               self.b)
         self.maximum_allowable_ring_radius = np.min( possible_max_radii)
         
-   
-    def update_working_image( self, img ):
-        assert ( img.shape == self.img.shape )
+    def set_working_image( self, img ):
+        assert ( img.shape == self.img_shape )
         self.img = img
+        if self.method != 'floor':
+            self._img_flat = img.ravel()
 
 ###############
 # MAIN METHOD #
@@ -90,7 +114,6 @@ class RingFetch:
         `polar_ring_final` is the corresponding intensities in the 
             effective pixels
         '''
-        
         self._define_radial_extent_of_ring(ring_radius)
         self._check_ring_edges()
         self._make_output_containers()
@@ -118,6 +141,8 @@ class RingFetch:
         nphi_min = int( 2 * np.pi * self.rmin )
         assert(nphi_min >= self.num_phi_nodes)
         assert( int(self.rmax)+1 < self.maximum_allowable_ring_radius)
+        if self.method != 'floor':
+            assert( int(self.rmax)+1 < self._max_radius_in_query_data)
     
     def _make_output_containers(self):
         self.ring_output = np.zeros( ( self.nrad, self.num_phi_nodes) )
@@ -126,13 +151,24 @@ class RingFetch:
         for self.rad_ind, radius in enumerate( self.radii):
 #           number of azimuthal points in radial image
             self.nphi = int( 2*np.pi*radius) 
-            self.InterpSimp = InterpSimple(self.a, self.b, radius+1,
-                                radius, self.nphi, raw_img_shape=self.img.shape)
-            self._set_polar_ring()
+            if self.method=='floor':
+                self.InterpSimp = InterpSimple(self.a, self.b, radius+1,
+                                    radius, self.nphi, raw_img_shape=self.img.shape)
+                self._set_polar_ring()
+            
+            elif self.method=='nearest':
+                self._set_polar_ring_mean_nearest(radius)
+            
+            elif self.method=='nearest4':
+                self._set_polar_ring_mean_nearest4(radius)
+            
+            else: 
+                self._set_polar_ring_weighted_nearest4(radius)
+            
             self._fill_in_masked_values()
             self._sum_intensity_in_azimuthal_nodes()
 
-
+    
     def _solid_angle_correction(self):
         theta_vals = self.r2theta(self.radii)
         solid_angle_per_radii = np.cos( theta_vals) **3
@@ -143,20 +179,44 @@ class RingFetch:
         stop_factor = self.rmax - np.floor( self.rmax )
         self.ring_output[0] *= start_factor
         self.ring_output[-1] *= stop_factor
-        
+       
+    def _set_polar_ring_weighted_nearest4(self, radius):
+        dists, inds =self.index_data["dists/%d"%radius].value ,\
+                        self.index_data["inds/%d"%radius].value,
+        weights = dists / dists.sum(1)[:,None]
+        self._polar_ring = np.average( self._img_flat[inds], axis=1, weights=weights)
+        if self.mask is not None:
+            self._polar_ring_mask = np.average( self._mask_flat[inds], axis=1, weights=weights)
+            self._polar_ring_mask = self._polar_ring_mask.astype(int)
+
+    def _set_polar_ring_mean_nearest4(self, radius):
+        inds =self.index_data["inds/%d"%radius].value, 
+        self._polar_ring = self._img_flat[inds].mean(1)
+        if self.mask is not None:
+            self._polar_ring_mask = self._mask_flat[inds].mean(1)
+            self._polar_ring_mask = self._polar_ring_mask.astype(int)
+
+
+    def _set_polar_ring_mean_nearest(self, radius):
+        inds =self.index_data["inds/%d"%radius].value, 
+        self._polar_ring = self._img_flat[inds]
+        if self.mask is not None:
+            self._polar_ring_mask = self._mask_flat[inds]
+
 ################################
 # RING RADII ITERATION METHODS #
 ################################
     def _set_polar_ring(self):
         polar_img = self.InterpSimp.nearest(self.img)
-        self.polar_ring = polar_img[0]
+        self._polar_ring = polar_img[0]
             
     def _fill_in_masked_values(self):
-        if self.mask is not None:
+        if self.mask is not None and self.method == 'floor':
 #           interpolate the polar mask
             polar_mask = self.InterpSimp.nearest(self.mask.astype(int))
-            self.polar_ring_mask = polar_mask[0]
-            self._fill_polar_ring()
+            self._polar_ring_mask = polar_mask[0]
+        
+        self._fill_polar_ring()
   
     def _sum_intensity_in_azimuthal_nodes(self):
             node_edges = np.linspace(0, self.nphi, self.num_phi_nodes+1) # fractional pixels
@@ -166,14 +226,14 @@ class RingFetch:
             for i in xrange(self.num_phi_nodes-1):
                 start = node_inds[i]
                 stop = node_inds[i+1]
-                summed_intens = self.polar_ring[start] * frac_start[i] \
-                                + np.sum(self.polar_ring[start+1:stop])\
-                                + self.polar_ring[stop] * frac_stop[i]
+                summed_intens = self._polar_ring[start] * frac_start[i] \
+                                + np.sum(self._polar_ring[start+1:stop])\
+                                + self._polar_ring[stop] * frac_stop[i]
                 self.ring_output[self.rad_ind,i] += summed_intens \
                                             * self.photon_conversion_factor
             start = node_inds[-2]
-            self.ring_output[self.rad_ind, -1] += (self.polar_ring[start] * frac_start[-1] \
-                                            + np.sum(self.polar_ring[start+1:]))\
+            self.ring_output[self.rad_ind, -1] += (self._polar_ring[start] * frac_start[-1] \
+                                            + np.sum(self._polar_ring[start+1:]))\
                                             * self.photon_conversion_factor
     
 ########################################
@@ -182,13 +242,13 @@ class RingFetch:
     def _fill_polar_ring( self ):
         """sample_width in degrees"""
         self.sample_width = int( round( self.nphi * 10*self.phi_resolution / 360. ))
-        assert( self.sample_width > 1 ) 
+        assert( self.sample_width > 1 )
         self._find_gap_indices()
         self._set_left_and_right_edge_indices()
         self._iterate_over_masked_regions()
 
     def _find_gap_indices(self):
-        mask = self.polar_ring_mask.astype(bool)
+        mask = self._polar_ring_mask.astype(bool)
         mask_rolled_right = np.roll( mask,1)
         mask_rolled_left = np.roll( mask,-1)
         
@@ -199,7 +259,7 @@ class RingFetch:
         self.gap_end_indices = np.where( is_end_of_gap)[0]
         
     def _set_left_and_right_edge_indices(self):
-        if self.polar_ring_mask[0] == 0:
+        if self._polar_ring_mask[0] == 0:
             self.gap_index_pairs = zip( self.gap_start_indices,
                                     np.roll(self.gap_end_indices,-1) )
         else:
@@ -207,33 +267,33 @@ class RingFetch:
                                       self.gap_end_indices )
 
     def _iterate_over_masked_regions(self):
-        for self.iStart, self.iEnd in self.gap_index_pairs:
+        for self._iStart, self._iEnd in self.gap_index_pairs:
             self._set_gap_size_and_ranges()
             self._get_linear_gap_interpolator()
             self._get_edge_noise()
             self._fill_in_masked_region_with_Gaussian_noise()
     
     def _set_gap_size_and_ranges(self):
-        if self.iEnd < self.iStart:
-            self.gap_size = self.iEnd + self.nphi - self.iStart
-            self.interpolation_range = np.arange( self.iStart,  self.iEnd + self.nphi )
+        if self._iEnd < self._iStart:
+            self.gap_size = self._iEnd + self.nphi - self._iStart
+            self.interpolation_range = np.arange( self._iStart,  self._iEnd + self.nphi )
         else:
-            self.gap_size = self.iEnd-self.iStart
-            self.interpolation_range = np.arange( self.iStart, self.iEnd)
+            self.gap_size = self._iEnd-self._iStart
+            self.interpolation_range = np.arange( self._iStart, self._iEnd)
 
     def _get_linear_gap_interpolator(self):
 #       estimate the edge means
-        left_mean = self.polar_ring[self.iStart-self.sample_width:self.iStart].mean()
-        right_mean = self.polar_ring[self.iEnd+1:self.sample_width+self.iEnd+1].mean() 
+        left_mean = self._polar_ring[self._iStart-self.sample_width:self._iStart].mean()
+        right_mean = self._polar_ring[self._iEnd+1:self.sample_width+self._iEnd+1].mean() 
 
 #       find the equation of line connecting edge means
         slope = (right_mean - left_mean) / self.gap_size
-        self.line = lambda x : slope* ( x-self.iStart ) + left_mean
+        self.line = lambda x : slope* ( x-self._iStart ) + left_mean
     
     def _get_edge_noise(self):
 #       estimate the edge noise 
-        left_dev = self.polar_ring[self.iStart-self.sample_width:self.iStart].std() 
-        right_dev = self.polar_ring[self.iEnd+1:self.sample_width+self.iEnd+1].std() 
+        left_dev = self._polar_ring[self._iStart-self.sample_width:self._iStart].std() 
+        right_dev = self._polar_ring[self._iEnd+1:self.sample_width+self._iEnd+1].std() 
         self.edge_noise = (left_dev + right_dev) / 2. #np.sqrt(2)
 
     def _fill_in_masked_region_with_Gaussian_noise(self):
@@ -241,7 +301,7 @@ class RingFetch:
         gap_range = self.interpolation_range % self.nphi
         gap_vals = np.random.normal( self.line(self.interpolation_range), 
                                     self.edge_noise)
-        self.polar_ring[gap_range] = gap_vals
+        self._polar_ring[gap_range] = gap_vals
 
 
 
@@ -299,10 +359,15 @@ class InterpSimple:
         self.indices_1d = self.X* self.yring_near + self.xring_near 
 
     def nearest( self, data_img , dtype=np.float32):
-        '''return a 2d np.array polar image (fastest method)'''
+        '''return a 2d np.array polar image'''
         if self.bin_fac :
             data_img = zoom( data_img, 1. / self.bin_fac, order=1 ) 
         data = data_img.ravel()
         return data[ self.indices_1d ]
 
+
+
+
+
+    
 
