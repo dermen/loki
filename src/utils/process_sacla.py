@@ -132,7 +132,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
                     detdist, wavelen, prefix, how='fetch', interp_method='floor', 
                     radii=None, q_resolution=0, phi_resolution=0,
                     nphi=None, qmin=None, qmax=None, qmin_pix=None, qmax_pix=None,
-                    detector_gain=None index_query_fname=None):
+                    detector_gain=None, index_query_fname=None):
      
     """
     Description
