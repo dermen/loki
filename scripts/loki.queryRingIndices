@@ -4,44 +4,9 @@ from argparse import ArgumentParser
 import os
 
 import numpy as np
-from scipy import spatial
 
 
-class PolarTree:
-    def __init__(self, a,b, img_shape, offset_pix = False):
-        self.img_shape = img_shape
-        self._define_polar_indices(a,b,offset_pix)
-        self._create_the_tree()
-        
-    def _define_polar_indices(self,a,b,offset_pix):
-        Y,X = np.indices( self.img_shape)
-        if offset_pix:
-            a += 0.5
-            b += 0.5
-            X += 0.5
-            Y += 0.5
-        R = np.sqrt( (X-a)**2 + (Y-b)**2 )
-        R = np.round( R, 0) # for some reason this is a heck of a lot faster when R is rounded..
-                            # I am unsure of the consequences, probable some rounding errors...
-        PHI = np.arctan2( Y-b, X-a )
-        self._points = zip( R.ravel(), PHI.ravel() )
-    
-    def _create_the_tree(self):
-        print ("Making the K-D tree...")
-        self.tree = spatial.cKDTree( self._points)
-
-    def set_working_image(self, img):
-        assert( img.shape == self.img_shape)
-        self.img_flat = img.ravel()
-
-    def mean_nearest_k( self, points, k):
-        inds =  self.tree.query( points, k=k)[1]
-        return self.img_flat[inds].mean(1)
-    
-    def weighted_nearest_k( self, points, k):
-        weights, inds =  self.tree.query( points, k=k)
-        weights /= dists.sum(1)[:,None]
-        return np.average( self.img[inds], axis=1, weights=weights) 
+from loki.RingData import PolarTree
 
 ########
 # ARGS #
