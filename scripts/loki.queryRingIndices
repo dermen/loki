@@ -11,46 +11,84 @@ from loki.RingData import PolarTree
 ########
 # ARGS #
 ########
-parser = ArgumentParser(description='Uses a K-D-Tree to map out indices of intensity rings and saves them to an .hdf5 file')
-parser.add_argument("-o", "--outputDir", type=str, dest="outputDir", 
-                help="Where to store the output data.",required=True)
-parser.add_argument( '-X', '--fast-dim', type=int,
-        dest='X', help='fast image dimension' )
-parser.add_argument( '-Y', '--slow-dim', type=int,
-        dest='Y', help='slow image dimension' )
-parser.add_argument( '-rmax', '--maximum-radius',  type=int, dest='rmax', 
-     help='largest r where ring indices will be computed' )
-parser.add_argument( '-p', type=str, dest='prefix', 
-     help='path of output file without a file suffix' )
-parser.add_argument( '-cf','--center-file', type=str, 
-    dest="center_filename", 
-     help='full path to a file containing the detector center point (where the forward beam intersects the detector)' )
+parser = ArgumentParser(
+    description='Uses a K-D-Tree to map out indices of intensity rings and saves them to an .hdf5 file')
+
+parser.add_argument(
+    '-o',
+    '--outputDir', 
+    type=str, 
+    dest='outputDir',
+    help='Where to store the output data.', 
+    required=True)
+
+parser.add_argument(
+    '-X', 
+    '--fast-dim', 
+    type=int,
+    dest='X', 
+    help='fast image dimension',
+    required=True)
+
+parser.add_argument(
+    '-Y', 
+    '--slow-dim', 
+    type=int,
+    dest='Y', 
+    help='slow image dimension',
+    required=True)
+
+parser.add_argument(
+    '-rmax', 
+    '--maximum-radius', 
+    type=int, 
+    dest='rmax',
+    help='largest r where ring indices will be computed',
+    required=True)
+
+parser.add_argument(
+    '-p', 
+    type=str, 
+    dest='prefix',
+    required=True,
+    help='path of output file without a file suffix')
+
+parser.add_argument(
+    '-cf',
+    '--center-file',
+    type=str,
+    dest='center_filename',
+    help='full path to a file containing the detector center point (where the forward beam intersects the detector)',
+    required=True)
 
 args = parser.parse_args()
 
 #######################
 # MAKE THE INDEX DATA #
 #######################
-center  = np.load( args.center_filename )
+center = np.load(args.center_filename)
 PT = PolarTree(center[0], center[1], img_shape=(args.Y, args.X), offset_pix=1)
 radii = np.arange(1, args.rmax)
 
-outfile_name = os.path.join( args.outputDir, "%s.hdf5"%args.prefix)
-outfile = h5py.File( outfile_name, 'w')
+outfile_name = os.path.join(args.outputDir, "%s.hdf5" % args.prefix)
+outfile = h5py.File(outfile_name, 'w')
 
-print( "Mapping indices for the rings...")
-for i,r in enumerate( radii):
-    nphi = int( 2* np.pi * r)
-    phi_range = np.linspace( -np.pi, np.pi, nphi)
-    ring_points = zip( [r]*nphi, phi_range)
-    
-    dists, inds = PT.tree.query( ring_points,k=1)
-    dists4, inds4 = PT.tree.query( ring_points,k=4)
+print("Mapping indices for the rings...")
+for i, r in enumerate(radii):
+    nphi = int(2 * np.pi * r)
+    phi_range = np.linspace(-np.pi, np.pi, nphi)
+    ring_points = zip([r] * nphi, phi_range)
 
-    outfile.create_dataset( "%s/%d"%('nearest/dists',r), data=dists)
-    outfile.create_dataset( "%s/%d"%('nearest/inds',r), data=inds.astype(int))
-    outfile.create_dataset( "%s/%d"%('nearest4/dists',r), data=dists4)
-    outfile.create_dataset( "%s/%d"%('nearest4/inds',r), data=inds4.astype(int))
+    dists, inds = PT.tree.query(ring_points, k=1)
+    dists4, inds4 = PT.tree.query(ring_points, k=4)
+
+    outfile.create_dataset("%s/%d" % ('nearest/dists', r), data=dists)
+    outfile.create_dataset(
+        "%s/%d" %
+        ('nearest/inds', r), data=inds.astype(int))
+    outfile.create_dataset("%s/%d" % ('nearest4/dists', r), data=dists4)
+    outfile.create_dataset(
+        "%s/%d" %
+        ('nearest4/inds', r), data=inds4.astype(int))
 
 outfile.close()
-
