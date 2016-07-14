@@ -137,7 +137,7 @@ def normalize_polar_images( imgs, mask_val = -1 ):
 
 def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
                      detdist, wavelen, prefix, how='fetch', interp_method='floor', 
-                     radii=None, q_resolution=0, phi_resolution=0, radius_unit='inv_ang',
+                     ring_locations=None, q_resolution=0, phi_resolution=0, radius_unit='inv_ang',
                      nphi=None, qmin=None, qmax=None, qmin_pix=None, qmax_pix=None,
                      detector_gain=None, index_query_fname=None):
      
@@ -191,7 +191,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
     ==========================================
     interp_method,      str, should be either ['floor', 'nearest', 'nearest4', 'weighted4' ]
     
-    ring_location,      list, range of ring radii or ring momentum transfer magnitudes 
+    ring_locations,      list, range of ring radii or ring momentum transfer magnitudes 
     
     q_resolution,  float , resolution of rings in inverse angstroms
     
@@ -323,7 +323,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
                     index_query_fname=index_query_fname)
 
         ring_radii = np.zeros( (num_imgs, len(ring_locations) ))
-        ring_mag = np.zeros_like( q_pixels)
+        ring_mag = np.zeros_like( ring_radii)
         
         for i_tag, tag in enumerate(tags):
 
@@ -342,7 +342,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
                     intensities[ring_index] = \
                                 fetcher.fetch_a_ring(q=ring_q)
                 
-                    ring_radii[ i_tag, ring_index  ] = int(round(fetch.q2r(ring_q)))
+                    ring_radii[ i_tag, ring_index  ] = int(round(fetcher.q2r(ring_q)))
                     
                     ring_mag[ i_tag, ring_index] = ring_q
             
@@ -355,7 +355,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
                     
                     ring_radii[ i_tag, ring_index  ] = ring_radius
                     
-                    ring_mag[ i_tag, ring_index] = fetch.r2q(ring_radius)
+                    ring_mag[ i_tag, ring_index] = fetcher.r2q(ring_radius)
 
             output_hdf.create_dataset( 'ring_intensities/%s'%tag,
                                 data = intensities, dtype=np.float32 )
@@ -382,7 +382,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
     output_hdf.create_dataset('interp_method', data=interp_method)
     
     output_hdf.create_dataset( 'x_center', data = x_center, dtype=np.float32)
-    output_hdf.create_dataset( 'y_center', data = y_center, dtype=np.floatre)
+    output_hdf.create_dataset( 'y_center', data = y_center, dtype=np.float32)
     output_hdf.create_dataset( 'wavelen' , data = wavelen, dtype=np.float32)
     output_hdf.create_dataset( 'pixsize' , data = pixsize, dtype=np.float32)
     output_hdf.create_dataset( 'detdist' , data = detdist, dtype=np.float32)
