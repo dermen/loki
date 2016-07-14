@@ -22,6 +22,19 @@ def imagesFromTags( runfile ,  tagList):
                     for tag in tagList )
     return img_gen
 
+def get_detector_gain(runFile):
+    f = h5py.File( runFile, 'r')
+    detgain = f[f.keys()[1]+\
+        '/detector_2d_assembled_1/detector_info' +'/absolute_gain']\
+        .value
+    return detgain
+
+def get_pixel_size(runFile):
+    f = h5py.File( runFile, 'r')
+    pixsize = f[f.keys()[1]+\
+        '/detector_2d_assembled_1/detector_info' \
+        +'/pixel_size_in_micro_meter'].value[0] / 1e6 
+    return pixsize
 
 def getNorm( runfile, probe=True, pump=False, beam=True):
     
@@ -71,8 +84,8 @@ def selectImagesSimple( runfile, shutter=1, beam=1,
     shutt_stat    = fh5[shutt_stat_path].value
 
 #   keep only the tags corresponding to status
-    tags     = [ tag for i,tag in enumerate( tags) 
-            if beam_stat[i] == beam and shutt_stat[i] == shutter ]
+    tags, energies     = zip( *[ (tag,energy_stat[i]) for i,tag in enumerate( tags) 
+            if beam_stat[i] == beam and shutt_stat[i] == shutter ])
 
     img_path = '%s/detector_2d_assembled_1/%s/detector_data'
     img_gen  = (  fh5[img_path%(run_key,tag) ].value 
@@ -80,9 +93,9 @@ def selectImagesSimple( runfile, shutter=1, beam=1,
     
     if return_extra:
         run = run_key.split('_')[1], 
-        return img_gen, tags, run, shutt_stat, eV_stat
+        return img_gen, tags, run
     else:
-        if return_eV:
+        if energy:
             return img_gen, tags, energy_stat
         else:
             return img_gen, tags
