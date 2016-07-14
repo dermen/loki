@@ -1,9 +1,9 @@
 import numpy as np
 import h5py
-import json
-from loki.RingData import InterpSimple, RingFetch
 
-from pylab import plot,show,imshow
+
+from loki.RingData import InterpSimple, RingFetch, RadialProfile
+from loki.utils.postproc_helper import smooth
 
 #####################################################
 # A GROUP OF HELPER FUNCTIONS FOR VARIOUS BEAMTIMES #
@@ -48,7 +48,8 @@ def getNorm( runfile, probe=True, pump=False, beam=True):
     return np.sum( intens_monit)
 
 def selectImagesSimple( runfile, shutter=1, beam=1, 
-                        beamline=3, hutch=1, return_extra=False ):
+                        beamline=3, hutch=1, return_extra=False,
+                        energy=False):
     """
     Parameters
     ==========
@@ -61,7 +62,9 @@ def selectImagesSimple( runfile, shutter=1, beam=1,
     run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
     tags          = fh5['/%s/detector_2d_assembled_1'%run_key].keys()[1:]
     beam_stat     = fh5['/%s/event_info/acc/accelerator_status'%run_key].value
-    
+   
+    energy_stat = fh5['/%s/event_info/bl_3/oh_2/photon_energy_in_eV'%run_key].value
+
     shutt_params = (run_key, beamline, hutch)
     shutt_stat_path = '/%s/event_info/bl_%d/eh_%d/xfel_pulse_selector_status'\
                         %shutt_params
@@ -77,9 +80,12 @@ def selectImagesSimple( runfile, shutter=1, beam=1,
     
     if return_extra:
         run = run_key.split('_')[1], 
-        return img_gen, tags, run, shutt_stat
+        return img_gen, tags, run, shutt_stat, eV_stat
     else:
-        return img_gen, tags
+        if return_eV:
+            return img_gen, tags, energy_stat
+        else:
+            return img_gen, tags
 
 def selectImages(  runfile, probe=True, pump=False, beam=True ):
     """
@@ -128,11 +134,12 @@ def normalize_polar_images( imgs, mask_val = -1 ):
     imgs[ imgs < 0 ] = mask_val
     return imgs
 
+
 def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
-                    detdist, wavelen, prefix, how='fetch', interp_method='floor', 
-                    radii=None, q_resolution=0, phi_resolution=0,
-                    nphi=None, qmin=None, qmax=None, qmin_pix=None, qmax_pix=None,
-                    detector_gain=None, index_query_fname=None):
+                     detdist, wavelen, prefix, how='fetch', interp_method='floor', 
+                     radii=None, q_resolution=0, phi_resolution=0, radius_unit='inv_ang',
+                     nphi=None, qmin=None, qmax=None, qmin_pix=None, qmax_pix=None,
+                     detector_gain=None, index_query_fname=None):
      
     """
     Description
@@ -184,8 +191,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
     ==========================================
     interp_method,      str, should be either ['floor', 'nearest', 'nearest4', 'weighted4' ]
     
-    radii,      list, range of interesting radii on the detector
-                    where one wants rings
+    ring_location,      list, range of ring radii or ring momentum transfer magnitudes 
     
     q_resolution,  float , resolution of rings in inverse angstroms
     
@@ -223,85 +229,169 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
 
     assert( how in [ 'fetch', 'polar' ] )
 
-    if detector_gain is None:
-        detector_gain = 1
-        photon_conversion_factor=1
-    else:
-        photon_energy = 12398.42 / wavelen
-        photon_conversion_factor = detector_gain * 3.65/ photon_energy
+    assert( radius_unit in [ 'inv_ang', 'pixels'])
 
     num_imgs = len(tags)
+
+    if type(wavelen) == type(detdist) == float:
+        
+        wavelen, detdist = [wavelen]*num_imgs, [detdist]*num_imgs
+       
+    else:
+
+        assert( len(wavelen) == len(detdist) ==  num_imgs )
+    
+    if detector_gain is None:
+        
+        detector_gain, photon_conversion_factor = -1, [1]*num_imgs
+        
+    else:
+        
+        photon_conversion_factor = [detector_gain * 3.65 * w / 12398.42 for w in wavelen]
+
     output_hdf = h5py.File(  prefix + '.hdf5', 'w' )
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#============================================================================
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     if how=='polar':
         
-        pix2invang  = lambda qpix : np.sin(np.arctan(qpix*pixsize/detdist )/2)\
-                                    *4*np.pi/wavelen 
-        invang2pix  = lambda qia  : np.tan(2*np.arcsin(qia*wavelen/4/np.pi))\
-                                    *detdist/pixsize
-        
         assert( nphi is not None)
         
-        if qmin_pix is None or qmax_pix is None:
-            assert( qmin is not None)
-            assert (qmax is not None)
-            qmin_pix = invang2pix ( qmin )
-            qmax_pix = invang2pix ( qmax )
-        
-#       Initialize the interpolater
-        interpolater  = InterpSimple( x_center, y_center, qmax_pix, qmin_pix, nphi, 
-                                        raw_img_shape=mask.shape )
-#       make a polar image mask
-        pmask   = interpolater.nearest( mask , dtype=bool ).round()
-#       Make the polar images
-        for tag in tags:
+
+        for i_tag, tag in enumerate(tags):
+            
+            pix2invang  = lambda qpix : np.sin(np.arctan(qpix*pixsize[i_tag]/detdist[i_tag] )/2)\
+                                        *4*np.pi/wavelen[i_tag]
+            
+            invang2pix  = lambda qia  : np.tan(2*np.arcsin(qia*wavelen[i_tag]/4/np.pi))\
+                                        *detdist[i_tag]/pixsize[i_tag]
+            
+            if qmin_pix is None or qmax_pix is None:
+            
+                assert( qmin is not None)
+                
+                assert (qmax is not None)
+                
+                qmin_pix = invang2pix (qmin)
+                
+                qmax_pix = invang2pix (qmax)
+            
+#           Initialize the interpolater
+            interpolater  = InterpSimple( x_center, y_center, qmax_pix, qmin_pix, nphi, 
+                                            raw_img_shape=mask.shape )
+#           make a polar image mask
+            pmask   = interpolater.nearest( mask , dtype=bool ).round()
+
+#           Make the polar images
             polar_img = pmask * interpolater.nearest( img_gen.next()) \
                             * photon_conversion_factor
-            output_hdf.create_dataset('ring_intensities/%s'%tag, data=polar_img)
-        
-        radii = np.arange( qmin_pix, qmax_pix )
-        q_vals =  np.array( [ pix2invang(q_pix)
-                            for q_pix in radii ] )
-    
-    else: #using default 'fetch' method
-        assert (phi_resolution is not None)
-        assert (q_resolution is not None)
-        assert( radii is not None)
-       
-        fetcher = RingFetch( x_center, y_center, mask.shape,
-                            mask, q_resolution, phi_resolution, wavelen,
-                            pixsize, detdist, photon_conversion_factor, interp_method, 
-                            index_query_fname)
 
-        for tag in tags:
+            output_hdf.create_dataset('ring_intensities/%s'%tag, data=polar_img, dtype=np.float32)
+            
+            output_hdf.create_dataset('ring_mask/%s'%tag, data=pmask.astype(np.int8), dtype=np.int8)
+            
+            ring_radii =  np.arange(qmin_pix, qmax_pix) 
+            
+            ring_mag =  np.array( [pix2invang(q_pix)for q_pix in radii])
+            
+            output_hdf.create_dataset( 'ring_radii/%s'%tag, data = ring_radii)
+            
+            output_hdf.create_dataset( 'ring_momentum_transfer/%s'%tag, data = ring_mag)
+           
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#============================================================================
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    else: # using default 'fetch' method
+        assert(phi_resolution is not None)
+        
+        assert(q_resolution is not None)
+        
+        assert(ring_locations is not None)
+       
+        fetcher = RingFetch( 
+                    a=x_center, 
+                    b=y_center, 
+                    img_shape=mask.shape,
+                    mask=mask, 
+                    q_resolution=q_resolution, 
+                    phi_resolution=phi_resolution,
+                    pixsize=pixsize, 
+                    interp_method=interp_method, 
+                    index_query_fname=index_query_fname)
+
+        ring_radii = np.zeros( (num_imgs, len(ring_locations) ))
+        ring_mag = np.zeros_like( q_pixels)
+        
+        for i_tag, tag in enumerate(tags):
+
+            fetcher.set_params(wavelen[i_tag], detdist[i_tag])
+            
+            fetcher.set_photon_factor(photon_conversion_factor[i_tag])
+            
             fetcher.set_working_image(img_gen.next() )
-            intensities = np.zeros((len(radii), fetcher.num_phi_nodes))
-            for ring_index, ring_radius in enumerate( radii):
-                intensities[ring_index] = \
-                            fetcher.fetch_a_ring(ring_radius)
+
+            intensities = np.zeros((len(ring_locations), fetcher.num_phi_nodes))
+            
+            if radius_unit=='inv_ang':
+                
+                for ring_index, ring_q in enumerate( ring_locations):
+                    
+                    intensities[ring_index] = \
+                                fetcher.fetch_a_ring(q=ring_q)
+                
+                    ring_radii[ i_tag, ring_index  ] = int(round(fetch.q2r(ring_q)))
+                    
+                    ring_mag[ i_tag, ring_index] = ring_q
+            
+            else:
+                    
+                for ring_index, ring_radius in enumerate( ring_locations):
+                
+                    intensities[ring_index] = \
+                                fetcher.fetch_a_ring(radius=ring_radius)
+                    
+                    ring_radii[ i_tag, ring_index  ] = ring_radius
+                    
+                    ring_mag[ i_tag, ring_index] = fetch.r2q(ring_radius)
+
             output_hdf.create_dataset( 'ring_intensities/%s'%tag,
-                                data = intensities )
+                                data = intensities, dtype=np.float32 )
+
 #       define meta parameters not specified
-        q_vals = np.array( [fetcher.r2q(q_rad) for q_rad in radii ] )
         nphi  = intensities.shape[1]
-        pmask = np.ones( ( len(radii), nphi))
+        
+        pmask = np.ones((len(ring_locations), nphi))
+    
+        output_hdf.create_dataset( 'ring_radii', data = ring_radii, dtype=np.float32)
+        
+        output_hdf.create_dataset( 'ring_moementum_transfer', data=ring_mag, dtype=np.float32)
+        
+        output_hdf.create_dataset( 'ring_mask', data = pmask.astype(np.int8)) 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#============================================================================
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     phi_values = np.arange( nphi) * 2 * np.pi / nphi
+
 #   save meta data
-    output_hdf.create_dataset( 'x_center', data = x_center)
-    output_hdf.create_dataset( 'y_center', data = y_center)
-    output_hdf.create_dataset( 'wavelen' , data = wavelen)
-    output_hdf.create_dataset( 'pixsize' , data = pixsize)
-    output_hdf.create_dataset( 'detdist' , data = detdist)
-    output_hdf.create_dataset( 'detgain' , data = detector_gain)
-    output_hdf.create_dataset( 'photon_factor' , data = photon_conversion_factor)
-    output_hdf.create_dataset( 'q_resolution' , data=q_resolution)
-    output_hdf.create_dataset( 'phi_resolution', data=phi_resolution)
-    output_hdf.create_dataset( 'q_mapping' , data = q_vals)
-    output_hdf.create_dataset( 'num_phi', data = nphi)
-    output_hdf.create_dataset( 'polar_mask', data = pmask.astype(int) ) 
-    output_hdf.create_dataset( 'ring_phis', data = phi_values )
-    output_hdf.create_dataset( 'q_radii', data = radii)
+    output_hdf.create_dataset('how', data=how)
+    output_hdf.create_dataset('interp_method', data=interp_method)
+    
+    output_hdf.create_dataset( 'x_center', data = x_center, dtype=np.float32)
+    output_hdf.create_dataset( 'y_center', data = y_center, dtype=np.floatre)
+    output_hdf.create_dataset( 'wavelen' , data = wavelen, dtype=np.float32)
+    output_hdf.create_dataset( 'pixsize' , data = pixsize, dtype=np.float32)
+    output_hdf.create_dataset( 'detdist' , data = detdist, dtype=np.float32)
+    output_hdf.create_dataset( 'detgain' , data = detector_gain, dtype=np.float32)
+    output_hdf.create_dataset( 'photon_factor' , data = photon_conversion_factor, dtype=np.float32)
+    output_hdf.create_dataset( 'q_resolution' , data=q_resolution ,dtype=np.float32)
+    output_hdf.create_dataset( 'phi_resolution', data=phi_resolution, dtype=np.float32)
+    output_hdf.create_dataset( 'num_phi', data = nphi, dtype=np.float32)
+    output_hdf.create_dataset( 'ring_phis', data=phi_values, dtype=np.float32 )
 
 #   save
     print ("saving data to file %s!"%(prefix + '.hdf5'))
@@ -335,13 +425,133 @@ def make_mpccd_mask( mpccd_img, border_pad=10, mask_val=0):
     """
 
     mask_template = np.ones_like( mpccd_img)
+    
     mask_template[ mpccd_img == mask_val ] = 0
     
     mask = mask_template.copy()
+    
     for i in xrange( border_pad):
+        
         mask = mask* np.roll(mask_template, i, axis=1)
+        
         mask = mask* np.roll(mask_template, -i, axis=1)
+        
         mask = mask* np.roll(mask_template, i, axis=0)
+        
         mask = mask* np.roll(mask_template, -i, axis=0)
 
     return mask.astype(bool)
+
+
+
+def calibrate_parameters( rad1, rad2, q1_sim, q2_sim, detdist_scan, wavelen_scan, 
+                        pixsize=0.00005): 
+    """ 
+    Using two Bragg rings, calibrate the photon wavelength and sample-to-detector position
+    for the given experiment..
+
+    `rad1` `rad2`       radius of two Bragg rings in pixel units
+
+    `q1_sim` `q2_sim`   Corresponding theortical moementum transfer magnitude of 
+                        the Bragg rings in inverse angstroms
+    
+    `detdist_scan`      range of detector distances to scan in meters
+    
+    `wavelen_scan`      range of wavelengths to scan in angstroms
+    
+    `pixsize`           size of the pixel in meters
+    """
+    
+
+    def diff_q(DETDIST, WAVELEN):
+
+        q1 = np.sin(np.arctan( rad1*pixsize/DETDIST )/2.)*4.*np.pi/ WAVELEN
+    
+        q2 = np.sin(np.arctan( rad2*pixsize/DETDIST )/2.)*4.*np.pi/ WAVELEN
+        
+        return np.abs( q1_sim - q1) + np.abs( q2_sim-q2)
+
+    
+    param_pairs = np.array( [ (detdist, wavelen, diff_q(detdist,wavelen) ) 
+                                
+                                for detdist in detdist_scan 
+                                    
+                                    for wavelen in wavelen_scan ] )
+
+    min_ind = np.argmin( param_pairs[:,2] )
+
+    detdist_correct, wavelen_correct, callibration_score =  param_pairs[min_ind]
+    
+
+    return detdist_correct, wavelen_correct, callibration_score
+
+
+def calibrate( img_gen, center, wavescan, detscan, q1_sim=2.48, q2_sim=2.99,
+                wavelen_guess=1.41, detdist_guess=0.051, speed='slow',
+                mask=None, index_query_fname=None, scan_width=50,
+                beta=20, window_size=40, factor=0.007, pixsize=0.00005):
+
+    """Use this function to calibrate the detector distance and the wavelength 
+    for a particular group of images (e.g. from a run)"""
+
+    rad1_guess = int(round(\
+                    np.tan( 2*np.arcsin(q1_sim*wavelen_guess/4./np.pi) )*detdist_guess/pixsize\
+                    ))
+    rad2_guess = int(round(\
+                    np.tan( 2*np.arcsin(q2_sim*wavelen_guess/4./np.pi) )*detdist_guess/pixsize\
+                    ))
+    rad1_scan = np.arange( rad1_guess-scan_width, rad1_guess+scan_width)
+    rad2_scan = np.arange( rad2_guess-scan_width, rad2_guess+scan_width)
+
+    radpro = RadialProfile( center, img_shape=mask.shape, mask=mask)
+    radpro.set_params(
+            wavelen=wavelen_guess,
+            detdist=detdist_guess,
+            pixsize=pixsize,
+            factor=factor)
+
+    detdists, wavelens, scores = [], [], []
+
+    for img in img_gen:
+        print ("\nCalibrating a new image...")
+        if speed=='slow':
+            rp1 = radpro.calculate_using_fetch( img, rad1_scan, index_query_fname=index_query_fname)
+            rp2 = radpro.calculate_using_fetch( img, rad2_scan, index_query_fname=index_query_fname)
+        else:
+            rp1 = radpro.calculate(img)[rad1_scan]
+            rp2 = radpro.calculate(img)[rad2_scan]
+        
+        sm_rp1 = smooth(rp1, beta, window_size)
+        sm_rp2 = smooth(rp2, beta, window_size)
+        r1 = np.argmax( sm_rp1 ) + rad1_scan[0]
+        r2 = np.argmax( sm_rp2 ) + rad2_scan[0]
+
+        print( "  Found ring1 at %d compared to %d."%(r1,rad1_guess))
+        print( "  Found ring2 at %d compared to %d."%(r2,rad2_guess))
+        print("  Calibrating...")
+
+        detdist, wavelen, score = calibrate_parameters(
+                                r1,
+                                r2,
+                                q1_sim,
+                                q2_sim,
+                                detscan,
+                                wavescan,
+                                pixsize)
+
+        print("  New detector distance calibrated from %.4f --> %.4f"%(detdist_guess, detdist))
+        print("  New wavelength calibrated from %.4f --> %.4f"%(wavelen_guess, wavelen))
+
+        rad1 = int(round(\
+                        np.tan( 2*np.arcsin(q1_sim*wavelen/4./np.pi) )*detdist/pixsize\
+                        ))
+        rad2 = int(round(\
+                        np.tan( 2*np.arcsin(q2_sim*wavelen/4./np.pi) )*detdist/pixsize\
+                        ))
+
+        detdists.append(detdist)
+        wavelens.append(wavelen)
+        scores.append(score)
+
+    return detdists, wavelens, scores
+
