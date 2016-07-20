@@ -59,9 +59,18 @@ class RingFit:
         self._prepare_fitting_framework( beta_i, num_high_pix, num_fitting_pts)
         self._fit_a_model(self.circle_model, param_guess=beta_i)
     
-        if return_mean:
-            return self.beta_fit, self.img1D[self.fit_indices].mean()
-        return self.beta_fit
+        x,y = self._get_xy()
+        a,b,r  = self.beta_fit
+        Ri = np.sqrt( (x-a)**2 + (y-b)**2)
+        self.residual = np.sum((Ri-r)**2)
+        
+        mean_intens = self.img1D[ self.fit_indices].mean()
+
+        return self.beta_fit, self.residual, mean_intens
+
+    def _get_xy(self):
+        """returns the x and y points used in _fit_a_model"""
+        return self.pts[0], self.pts[1]
 
     def fit_ellipse(self, beta_i  ,num_fitting_pts=5000, 
                         ring_width=40,num_high_pix = 20):
@@ -83,6 +92,7 @@ class RingFit:
         self.ring_width = ring_width
         self._prepare_fitting_framework( beta_i, num_high_pix, num_fitting_pts)
         self._fit_a_model( self.ellipse_model, param_guess=beta_i)
+        return self.beta_fit
 
 
     def _prepare_fitting_framework(self, ring_guess, num_high_pix, 
@@ -118,9 +128,9 @@ class RingFit:
 
     def _fit_a_model(self, model, param_guess):
 #       use odr module to fit data to model
-        pts = np.row_stack( [self.x1D[ self.fit_indices], 
+        self.pts = np.row_stack( [self.x1D[ self.fit_indices], 
                             self.y1D[ self.fit_indices]])
-        lsc_data = odr.Data( pts , y=1)
+        lsc_data = odr.Data( self.pts , y=1)
         lsc_odr = odr.ODR( lsc_data, model, param_guess)
         lsc_out = lsc_odr.run()
         self.beta_fit = lsc_out.beta
