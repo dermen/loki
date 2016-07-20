@@ -80,8 +80,8 @@ class RingFit:
                                 bias the fit)
         '''
         
-        self._prepare_fitting_framework( beta_i, num_high_pix, num_fitting_pts)
         self.ring_width = ring_width
+        self._prepare_fitting_framework( beta_i, num_high_pix, num_fitting_pts)
         self._fit_a_model( self.ellipse_model, param_guess=beta_i)
 
 
