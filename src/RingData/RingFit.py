@@ -12,12 +12,22 @@ class RingFit:
         '''
 
         self._set_circle_model()
+        self._set_circle_model_fast()
         self._set_ellipse_model()
         
         self.img = np.copy(img)
         self._store_1D_image_index_arrays()
 
-    
+
+    def _set_circle_model_fast( self):
+        f_circle  = lambda beta,x : ( x[0] - beta[0] )**2 \
+                                  + ( x[1] - beta[1])**2 - beta[2]**2
+        self.circle_model_fast = odr.Model(f_circle, 
+            implicit=True,
+            estimate=self.calc_estimate,
+            fjacd=self.circle_jacobian_data, 
+            fjacb=self.circle_jacobian_beta)
+
     def _set_circle_model(self):
 #       Equation for a circle        
         f_circle  = lambda beta,x : ( x[0] - beta[0] )**2 \
@@ -37,6 +47,32 @@ class RingFit:
         self.y1D   = self.y.ravel()
         
 
+    def fit_circle_fast( self, beta_i, num_fitting_pts=5000, 
+                ring_width=20 , num_high_pix=20, 
+                return_mean = False):
+        '''
+        Fit a circle to a ring image
+        ============================== 
+        beta_i          - float tuple , ( x_center, y_center,radius )
+        num_fitting_pts - int, number of pixels to include in fit 
+        ring_width      - int, width ring-like region on image that 
+                            contains ring of interest (pixels units)
+        num_high_pix    - int, remove this many pixels before 
+                            running fit (removes artificial high pixels 
+                            that might bias the fit)
+        '''
+
+        self.ring_width = ring_width
+        self._prepare_fitting_framework( beta_i, num_high_pix, num_fitting_pts)
+        self._fit_a_model_fast(self.circle_model_fast, param_guess=beta_i)
+    
+        x,y = self._get_xy()
+        a,b,r  = self.beta_fit
+        Ri = np.sqrt( (x-a)**2 + (y-b)**2)
+        self.residual = np.sum((Ri-r)**2)
+        mean_intens = self.img1D[ self.fit_indices].mean()
+        return self.beta_fit, self.residual, mean_intens
+
     def fit_circle( self, beta_i, num_fitting_pts=5000, 
                 ring_width=20 , num_high_pix=20, 
                 return_mean = False):
@@ -50,15 +86,12 @@ class RingFit:
         num_high_pix    - int, remove this many pixels before 
                             running fit (removes artificial high pixels 
                             that might bias the fit)
-        return_mean     - bool, whether or not to return 
-                                        the mean intensity of the sampled
-                                        pixels
         '''
 
         self.ring_width = ring_width
         self._prepare_fitting_framework( beta_i, num_high_pix, num_fitting_pts)
         self._fit_a_model(self.circle_model, param_guess=beta_i)
-    
+
         x,y = self._get_xy()
         a,b,r  = self.beta_fit
         Ri = np.sqrt( (x-a)**2 + (y-b)**2)
@@ -125,6 +158,44 @@ class RingFit:
             num_fitting_pts = num_pts / 2
         return num_fitting_pts
 
+       
+    @staticmethod
+    def circle_jacobian_beta( beta, x):
+        xc,yc,r = beta
+        xi,yi = x
+        df_db    = np.empty(( len(beta), x.shape[1]))
+        df_db[0] =  2*(xc-xi)                     # d_f/dxc
+        df_db[1] =  2*(yc-yi)                     # d_f/dyc
+        df_db[2] = -2*r                           # d_f/dr
+        return df_db
+
+    @staticmethod
+    def circle_jacobian_data(beta, x):
+        xc,yc,r = beta
+        xi,yi = x
+        df_dx    = np.empty_like( x )
+        df_dx[0] =  2*(xi-xc)                     # d_f/dxi
+        df_dx[1] =  2*(yi-yc)                     # d_f/dyi
+        return df_dx
+   
+    @staticmethod
+    def calc_estimate(data):
+        xc0, yc0 = data.x.mean(axis=1)
+        r0 = np.sqrt((data.x[0]-xc0)**2 +(data.x[1] -yc0)**2).mean()
+        return xc0, yc0, r0
+
+
+    def _fit_a_model_fast(self, model, param_guess):
+#       use odr module to fit data to model
+        self.pts = np.row_stack( [self.x1D[ self.fit_indices], 
+                            self.y1D[ self.fit_indices]])
+        
+        lsc_data = odr.Data( self.pts , y=1)
+        lsc_odr   = odr.ODR(lsc_data, model)#  param_guess)
+        lsc_odr.set_job(deriv=3) 
+        lsc_odr.set_iprint(iter=1, iter_step=1)
+        lsc_out = lsc_odr.run()
+        self.beta_fit = lsc_out.beta
 
     def _fit_a_model(self, model, param_guess):
 #       use odr module to fit data to model
