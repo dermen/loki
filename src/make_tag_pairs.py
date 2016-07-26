@@ -7,10 +7,11 @@ from scipy.spatial import distance
 from loki.utils import postproc_helper as helper
 from loki.utils import stable
 
+
 class MakeTagPairs:
 
     def __init__(self, db_pickle, fixed_qr=False, qrmin=None,
-                 qrmax=None, dqr=1, poly_stride=10, rm_mean_outliers=True,
+                 qrmax=None, dqr=1, rm_mean_outliers=True,
                  rm_mean_thresh=3, min_grp_size=20, signal=None,
                  min_signal=None, max_signal=None):
         """
@@ -37,14 +38,8 @@ class MakeTagPairs:
         'rm_mean_thresh'   - threshhold parameter for removing shots
                             make this lower to remove more shots
 
-        'poly_stride' - resolution parameter for computing polynomials along
-                     0-2PI
-                    (used for poly comparison of shots)
-                default is 10, so the res will be   10 * 2pi/nphi
-                make this number higher to speed up comparison computation,
-                but dont make it too high (has'nt been tested)
         'signal'       - tells what kind of signal should be thresholded
-                        can be ['mean', 'stdev', 'snr' ]
+                        can be ['shot_mean', 'shot_stdev'] 
         'min_signal'   - minimum signal (as determined by the 'signal'
                         parameter)
         'max_signal'   - maximum signal (as determined by the 'signal'
@@ -68,10 +63,10 @@ class MakeTagPairs:
         self.qrmin = qrmin
         self.qrmax = qrmax
         self.dqr = dqr
+        
         self.min_grp_size = min_grp_size
-        self._make_signal_column(signal)
         if signal is not None:
-            self._filter_from_signal(min_signal)
+            self._filter_from_signal(signal, min_signal, max_signal)
 
 #       exclude exposures with a high/low mean intensity
         if rm_mean_outliers:
@@ -84,29 +79,13 @@ class MakeTagPairs:
         if not fixed_qr:
             self._group_shots_by_peakpos()
 
-    def _make_signal_column(self, signal):
-        assert(signal in [None, 'mean', 'stdev', 'snr'])
-#           whether to apply a secondary signal threshhold
-        if signal == 'mean':
-            print("Will use the shot mean filter...")
-            self.df['sig'] = self.df.shot_mean
-        elif signal == 'stdev':
-            print("Will use the shot standard deviation filter...")
-            self.df['sig'] = self.df.shot_stdev
-        elif signal == 'snr':
-            print ("Will use signal to noise filter, be sure you used the",
-                   "pk_detect option when making the database or this",
-                   "will break.")
-            assert(self.df.pk_amp[0] is not None and
-                   self.df.background_offset is not None)
-            self.df['sig'] = self.df.pk_amp / self.df.background_offset
-
-    def _filter_from_signal(self, min_signal):
+    def _filter_from_signal(self, signal, min_signal, max_signal):
         n_total = len(self.df)
+        assert( signal in self.df )
         if min_signal is not None:
-            self.df = self.df.query('sig >= %f' % min_signal)
+            self.df = self.df.query('%s >= %f' % (signal, min_signal))
         if max_signal is not None:
-            self.df = self.df.query('sig <= %f' % max_signal)
+            self.df = self.df.query('%s <= %f' % (signal, max_signal))
         n_removed = n_total - len(self.df)
         print ("Removed %d/%d exposures from analysis" % (n_removed,
                                                           n_total))
@@ -139,7 +118,7 @@ class MakeTagPairs:
                         is still too large, then the pair s,s' wont be
                         considered.
         """
-        self.outfile = h5py.File( outfilename, 'w')
+        self.outfile = h5py.File(outfilename, 'w')
 
         self.poly_thresh = poly_thresh
         self.tag_pairs = []
@@ -154,7 +133,6 @@ class MakeTagPairs:
             self._pair_group()
 
         self.outfile.close()
-
 
     def _iterate_groups(self):
         """
@@ -181,11 +159,11 @@ class MakeTagPairs:
 #       polynomial distance measure between shot i and shot j
         print("  Calculating the distance matrix...")
         eps = distance.cdist(Py, Py, metric='euclidean')
-        
+
         print("  Calculating the preference matrix...")
         # Add the max to the diagonal, otherwise the diagonal will
         # register as the minimum (each shot is closest to itself)
-        epsI = 1.1*eps.max(1) * np.identity(ngroup)
+        epsI = 1.1 * eps.max(1) * np.identity(ngroup)
         eps += epsI
 
 #       column 0 is the shot, columns 1->N are the "closest"
@@ -193,47 +171,54 @@ class MakeTagPairs:
         self._shot_preference = np.roll(eps.argsort(1), 1, axis=1)
 
         print("    storing in hash table...")
-        pref_dict = {str(E[0]): list(E[1:]) 
-            for E in self._shot_preference.astype(str) }
+        pref_dict = {str(E[0]): list(E[1:])
+                     for E in self._shot_preference.astype(str)}
 
 #       use the stable roommate (Irving's) algorithm to pair the shots
         print("  Forming the pairings using Irving's algorthm...")
         pairs_dict = stable.stableroomate(prefs=pref_dict)
-        
-        pairs = self._remove_duplicate_pairs( pairs_dict)
 
-        tag_pairs = [ (str(self.df_g.tag[i]), str(self.df_g.tag[j]) ) 
-            for i,j in pairs]
+        pairs = self._remove_duplicate_pairs(pairs_dict)
 
-        self.tag_pairs.extend(  tag_pairs )
+        tag_pairs = [(str(self.df_g.tag[i]), str(self.df_g.tag[j]))
+                     for i, j in pairs]
 
-        pdists = [ eps[i][j] for i,j in pairs ]
-        score = np.mean(pdists)/np.mean(eps.ravel())
+        self.tag_pairs.extend(tag_pairs)
 
-        print("  Pairing score for group %d: %.3f"%(self.groupID, score))
+        pdists = [eps[i][j] for i, j in pairs]
+        score = np.mean(pdists) / np.mean(eps.ravel())
 
-        self.outfile.create_dataset('group%d/pair_distances'%self.groupID, data=pdists)
-        self.outfile.create_dataset('group%d/tag_pairs'%self.groupID, data=tag_pairs)
-        self.outfile.create_dataset('group%d/pairs'%self.groupID, data=pairs)
-        self.outfile.create_dataset('group%d/score'%self.groupID, data=score)
-        self.outfile.create_dataset('group%d/distance_matrix'%self.groupID, data=eps)
+        print("  Pairing score for group %d: %.3f" % (self.groupID, score))
+
+        self.outfile.create_dataset(
+            'group%d/pair_distances' %
+            self.groupID, data=pdists)
+        self.outfile.create_dataset(
+            'group%d/tag_pairs' %
+            self.groupID, data=tag_pairs)
+        self.outfile.create_dataset('group%d/pairs' % self.groupID, data=pairs)
+        self.outfile.create_dataset('group%d/score' % self.groupID, data=score)
+        self.outfile.create_dataset(
+            'group%d/distance_matrix' %
+            self.groupID, data=eps)
+        print ("Saved pairing data to %s!"%self.outfile.filename)
 
     @staticmethod
     def _remove_duplicate_pairs(pairs_dict):
         pairs = []
-        for k,v in pairs_dict.iteritems():
+        for k, v in pairs_dict.iteritems():
             set_p = set((int(k), int(v)))
             if set_p not in pairs:
-                pairs.append( set_p )
-        return [ [i,j] for i,j in pairs ]
+                pairs.append(set_p)
+        return [[i, j] for i, j in pairs]
 
 
-def pair_shots(  eps ):
+def pair_shots(eps):
     #epsI = 1.1*eps.max(1) * np.identity(eps.shape[0])
     #eps += epsI
     shot_preference = np.roll(eps.argsort(1), 1, axis=1)
-    pref_dict = {str(E[0]): list(E[1:]) 
-        for E in shot_preference.astype(str) }
+    pref_dict = {str(E[0]): list(E[1:])
+                 for E in shot_preference.astype(str)}
 
     pairs_dict = stable.stableroomate(prefs=pref_dict)
     return pairs_dict
@@ -242,5 +227,5 @@ def pair_shots(  eps ):
 if __name__ == '__main__':
     db_pickle = 'test.pkl'
     outf = 'test_pairs.hdf5'
-    makeTagPairs = MakeTagPairs(db_pickle, fixed_qr=True)
+    makeTagPairs = MakeTagPairs(db_pickle, fixed_qr=True, signal='shot_mean', min_signal=62)
     makeTagPairs.Make(outf)
