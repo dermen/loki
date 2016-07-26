@@ -5,8 +5,7 @@ import numpy as np
 from scipy.spatial import distance
 
 from loki.utils import postproc_helper as helper
-#from loki.utils import stable
-import stable
+from loki.utils import stable
 
 class MakeTagPairs:
 
