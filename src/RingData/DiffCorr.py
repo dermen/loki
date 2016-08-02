@@ -77,14 +77,13 @@ class DiffCorr:
             x=range(0,num_phi/2-1,1)
             y=range(num_phi-2,num_phi/2-1,-1)
             
-#             assert ( len(x)==len(y) )
             # mapping indices of cpsi for left to right-hand side of autocorr
             mapping = np.array(zip(x,y))
-            try:
-                assert ( np.round(cpsi[ mapping[i,0] ], 4) == -np.round(cpsi[ mapping[i,1] ], 4) for i in range(mapping.shape[0]) )
-            except AssertionError: 
-                print cpsi [ mapping [0,0]], cpsi [ mapping [0,1]]
-#                 return np.round(cpsi[ mapping[:,0] ], 4), -np.round(cpsi[ mapping[:,1] ], 4)
+#             try:
+#                 assert ( np.round(cpsi[ mapping[i,0] ], 4) == -np.round(cpsi[ mapping[i,1] ], 4) for i in range(mapping.shape[0]) )
+#             except AssertionError: 
+#                 print cpsi [ mapping [0,0]], cpsi [ mapping [0,1]]
+
         else:
             # if not interpolating, match cpsi closest in absolute value
             half=cpsi[:num_phi/2]
