@@ -69,7 +69,7 @@ class DiffCorr:
             
         if learning_rate==None:
             # estimate learning rate
-            learning_rate = 1e-2/np.sum(np.mean(autocorr,axis=0)**2)
+            learning_rate = 1.0/ autocorr.shape[0] /np.sum(np.mean(autocorr,axis=0)**2)
         
         # calculate cos psi
         cpsi = self.get_cpsi(autocorr.shape[1], q_value, wavelen)
@@ -107,16 +107,17 @@ class DiffCorr:
             # mapping indices of cpsi for left to right-hand side of autocorr
             mapping = np.array(zip(ind,match))
         
-        weights, asyms, change_in_weights = self._iter_gradient_descent(autocorr, mapping, num_iter,learning_rate)
+        print ("begining gradient descent: learning_rate = %g"%learning_rate)
+        weights, asyms = self._iter_gradient_descent(autocorr, mapping, num_iter,learning_rate)
             
         if interpolate:
             if check_converg:
-                return weights, cpsi, autocorr, asyms, change_in_weights
+                return weights, cpsi, autocorr, asyms # , change_in_weights
             else:
                 return weights, cpsi, autocorr
         else:
             if check_converg:
-                return weights, cpsi, asyms, change_in_weights
+                return weights, cpsi, asyms #, change_in_weights
             else:
                 return weights, cpsi
     
@@ -126,11 +127,12 @@ class DiffCorr:
         weights=np.ones(autocorr.shape[0])/autocorr.shape[0]
         
         asyms = np.zeros(num_iter)
-        change_in_weights=np.zeros(num_iter)
+#         change_in_weights=np.zeros(num_iter)
         
         # compute a threshold for convergence: 0.1% of total variance in the average
         thresh = np.var( np.dot(weights,autocorr) ) * autocorr.shape[1] * 0.1/100.
 
+        gradient = np.zeros(weights.shape)
          # iterate through gradient descent
         for k in range(num_iter):
             old_weights = weights.copy()
@@ -141,11 +143,9 @@ class DiffCorr:
             if asymmetry <= thresh:
                 print "Convergence in weighted averaging achieved after %d iterations"%k
                 asyms = asyms[:k+1]
-                change_in_weights=change_in_weights[:k+1]
+#                 change_in_weights=change_in_weights[:k+1]
                 break
-                
 
-            gradient = np.zeros(weights.shape)
 
             for j in range(gradient.shape[0]):
                 gradient[j] = np.sum((autocorr[j][mapping[:,0]]-autocorr[j][mapping[:,1]])*\
@@ -155,12 +155,12 @@ class DiffCorr:
             # normalize weights
             weights=weights/np.sum(weights)
 
-            change_in_weights[k]=np.sum((weights-old_weights)**2.0)
+#             change_in_weights[k]=np.sum((weights-old_weights)**2.0)
         
         if asyms[-1] > thresh:
             print "WARNING: weighted averaging did NOT converage after %d iterations."%num_iter
         
-        return weights, asyms, change_in_weights
+        return weights, asyms #, change_in_weights
     
     def _interpolate_autocorr(self, autocorr, num_phi, cpsi):
         # interpolation
