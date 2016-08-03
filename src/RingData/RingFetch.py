@@ -319,14 +319,15 @@ class RingFetch:
         self._gap_end_indices = np.where(is_end_of_gap)[0]
 
     def _set_left_and_right_edge_indices(self):
-        if self._polar_ring_mask[0] == 0:
-            self._gap_index_pairs = zip(self._gap_start_indices,
-                                       np.roll(self._gap_end_indices, -1))
-        else:
-            self._gap_index_pairs = zip(self._gap_start_indices,
-                                       self._gap_end_indices)
+        #if self._polar_ring_mask[0] == 0:
+        self._gap_index_pairs = zip(self._gap_start_indices,
+            np.roll(self._gap_end_indices, -1))
+        #else:
+        #    self._gap_index_pairs = zip(self._gap_start_indices,
+        #                               self._gap_end_indices)
 
     def _iterate_over_masked_regions(self):
+        
         for self._iStart, self._iEnd in self._gap_index_pairs:
             self._set_gap_size_and_ranges()
             self._get_linear_gap_interpolator()
