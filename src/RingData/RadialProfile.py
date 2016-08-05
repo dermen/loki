@@ -30,6 +30,11 @@ class RadialProfile:
         self.Y, self.X = np.indices( img_shape )
         self._set_R()
         self._set_normalization()
+        
+        self.wavelen = None
+        self.pixsize = None
+        self.detdist = None
+        self.factor = None
 
     def _set_R(self):
         self.R = np.sqrt((self.Y-self.y_center)**2 + \
@@ -66,9 +71,9 @@ class RadialProfile:
         return np.nan_to_num(radial_profile)
 
 
-    def calculate_using_fetch( self, img, radii, wavelen=None, detdist=None, pixsize=None,
-                                factor=None, q_resolution=.01, phi_resolution=10,
-                                index_query_fname=None):
+    def calculate_using_fetch( self, img, radii, wavelen=None, 
+            detdist=None, pixsize=None, factor=None, 
+            q_resolution=.01, phi_resolution=10,index_query_fname=None):
         """
         Calculates a radial profile using a much slower method that 
         adjusts the output for solid angle
