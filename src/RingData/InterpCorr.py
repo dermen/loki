@@ -38,7 +38,7 @@ class InterpCorr:
         Returns interpolated correlation data, and cos(psi) for all data
         ================================================================
         If cos(psi) is out of bounds for the data before interpolation, 
-        interpolated data = 0 at those cos(psi) values
+        interpolated data = numpy.inf at those cos(psi) values
         
         Returns:
         
@@ -63,7 +63,7 @@ class InterpCorr:
                 cpsi = InterpCorr.get_cpsi( num_phi, w, qs[0], qs[1] )
                 
                 interpolator = interp.interp1d( cpsi, self.corr[idx],
-                bounds_error= False, fill_value=0,)
+                bounds_error= False, fill_value=np.inf)
                 interp_corr[idx] = interpolator(new_cpsi)
         
         return interp_corr, new_cpsi
