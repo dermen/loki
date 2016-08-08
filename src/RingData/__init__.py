@@ -7,3 +7,4 @@ from .RadialProfile import RadialProfile
 from .DiffCorr import DiffCorr
 from .RingFit import RingFit
 from .InterpCorr import InterpCorr
+from .WeighAverage import WeighAverage
