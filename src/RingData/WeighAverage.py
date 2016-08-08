@@ -11,7 +11,7 @@ class WeighAverage:
                     all correlations needed to be average
                     
         cpsi         - 1D np.array (num_psi)
-                     cos psi values, assumed to be interpolated, ranges from -1 to 1
+                     cos psi values, assumed to be interpolated, range from -1 to 1
         
         interpolated - Bool, default True, flags that the corr is interpolated
         """
@@ -43,7 +43,7 @@ class WeighAverage:
         ================================================================
         num_iter       - int, max number of interations
         
-        learning_rate  - float, scaling factor for gradient descent step
+        learning_rate  - float, scaling factor for gradient descent steps
         
         thresh         - float, asymmetry convergence threshold 
         """
@@ -53,7 +53,7 @@ class WeighAverage:
   
     def fit(self):
         """
-        Do gradient descent to find weights for maximally symmetry average
+        Do gradient descent to find weights for maximally symmetric average
         ================================================================
         
         Returns:
