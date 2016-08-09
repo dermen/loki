@@ -7,6 +7,7 @@
 import numpy as np
 
 import scipy.interpolate as interp
+log_ret = '\x1b[80D\x1b[1A\x1b[K'
 
 class InterpCorr:
     def __init__( self, corr, wavlen, q_values, num_psi ):
@@ -29,6 +30,7 @@ class InterpCorr:
                     cos(psi) = [-1,1]
         '''
         self.corr = corr
+        self.num_phi = corr.shape[-1]
         self.wavlen = wavlen
         self.q_values = q_values
         self.num_psi = num_psi
@@ -57,14 +59,30 @@ class InterpCorr:
         else:
             interp_corr = np.zeros( (self.corr.shape[0], self.num_psi) )        
         
-        for qs in self.q_values:
-            for idx, w in enumerate(self.wavlen):
-                num_phi = self.corr[idx].shape[-1]
-                cpsi = InterpCorr.get_cpsi( num_phi, w, qs[0], qs[1] )
+
+        # Conisder adding this for speed-up speedup ... but maybe not significant
+
+        #u_wave = list(set( self.wavlen) )
+        #num_shots =  len(self.corr)
+        #cpsi_dict = {}
+        #num_phi = self.corr.shape[-1]
+        #for w in u_wave:
+        #    cpsi_dict[w] = [ InterpCorr.get_cpsi(num_phi, w, q1, q2 )   
+        #        for q1,q2 in self.q_values]
+
+        num_shot = len( self.corr)
+        
+        # if applying the above patch, sqitch the comments on `cpsi =` statement below
+        for ishot, w in enumerate(self.wavlen):
+            print( "%sInterpolating shot %d/%d..."%(log_ret,ishot+1,num_shot) )
+            for iq, (q1,q2) in enumerate(self.q_values):
                 
-                interpolator = interp.interp1d( cpsi, self.corr[idx],
-                bounds_error= False, fill_value=np.inf)
-                interp_corr[idx] = interpolator(new_cpsi)
+                #cpsi = cpsi_dict[w][iq]
+                cpsi = InterpCorr.get_cpsi( self.num_phi, w, q1, q2 )
+                
+                interpolator = interp.interp1d( cpsi, self.corr[ishot, iq],
+                    bounds_error= False, fill_value=np.inf)
+                interp_corr[ishot, iq] = interpolator(new_cpsi)
         
         return interp_corr, new_cpsi
             
