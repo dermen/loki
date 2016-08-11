@@ -1,5 +1,6 @@
 
 import numpy as np
+import sys
 
 
 class WeighAverage:
@@ -106,10 +107,10 @@ class WeighAverage:
         
         if self.interpolated:
             try:
-                end_point = np.where((self.cpsi[0]+self.cpsi) == 0 )[0][0]
+                end_point = np.where(np.round(self.cpsi[0]+self.cpsi, 5) == 0 )[0][0]
             except IndexError:
                 print "ERORR!!! Cannot find match for minimum cos psi value %g"%np.min(self.cpsi)
-                exit()
+                sys.exit()
                 
             # find where cpsi = zero or close to zero is
             mid_point = np.argmin(np.abs(self.cpsi))
