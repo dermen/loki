@@ -28,7 +28,7 @@ class WeighAverage:
         self.interpolated = interpolated
         
         # guess initial parameters for 
-        self.num_iter = 300
+        self.num_iter = 30
         # compute a threshold for convergence: 1% of total variance in the average
         self.thresh = np.var( np.dot(self.weights,self.corr) ) * self.corr.shape[1] * 1/100.
         self.learning_rate = 1.0/ self.corr.shape[0] /np.sum(np.mean(self.corr, axis=0)**2.0)
@@ -105,16 +105,25 @@ class WeighAverage:
         num_psi = len(self.cpsi)
         
         if self.interpolated:
-            # this is the default
-            x = np.arange(0, num_psi/2, 1)
-            y = np.arange( num_psi-1,num_psi/2, -1)
-        
+            try:
+                end_point = np.where((self.cpsi[0]+self.cpsi) == 0 )[0][0]
+            except IndexError:
+                print "ERORR!!! Cannot find match for minimum cos psi value %g"%np.min(self.cpsi)
+                exit()
+                
+            # find where cpsi = zero or close to zero is
+            mid_point = np.argmin(np.abs(self.cpsi))
+            x = np.arange(0, mid_point+1, 1)
+            y = np.arange( end_point,mid_point, -1)
+
             self.mapping = np.array( zip(x,y) )
-        
-            # check that mapping is done correctly
-            assert( [ self.cpsi[p[0]] == -self.cpsi[p[1]]  for p in self.mapping ] )
+            
+            # check that mapping has been done correctly
+            assert ( ( np.round(self.cpsi[self.mapping[:,0]]+ self.cpsi[self.mapping[:,1]],5) == 0.0 ).all() )
         
         else:        
+            #############################################################################
+            ##### Deprecated code: all corr should be interpolated in the future#########
             # if data passed is not interpolated, match cpsi closest in absolute value
             half=self.cpsi[:num_psi/2]
             # find where cpsi ~ 0 is
@@ -132,6 +141,8 @@ class WeighAverage:
         
             # mapping indices of cpsi for left to right-hand side of autocorr
             self.mapping = np.array(zip(ind,match))
+            
+            #############################################################################
     
 
         
