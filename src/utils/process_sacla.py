@@ -247,7 +247,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
     num_imgs = len(tags)
 
     if type(wavelen) == type(detdist) == float:
-        
+       
         wavelen, detdist = [wavelen]*num_imgs, [detdist]*num_imgs
        
     else:
@@ -262,153 +262,154 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
         
         photon_conversion_factor = [detector_gain * 3.65 * w / 12398.42 for w in wavelen]
 
-    output_hdf = h5py.File(  prefix + '.hdf5', 'w' )
+    with h5py.File(  prefix + '.hdf5', 'w' ) as output_hdf:
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #============================================================================
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    if how=='polar':
-        
-        assert( nphi is not None)
-        
+        if how=='polar':
+            
+            assert( nphi is not None)
+            
 
-        for i_tag, tag in enumerate(tags):
-            
-            pix2invang  = lambda qpix : np.sin(np.arctan(qpix*pixsize[i_tag]/detdist[i_tag] )/2)\
-                                        *4*np.pi/wavelen[i_tag]
-            
-            invang2pix  = lambda qia  : np.tan(2*np.arcsin(qia*wavelen[i_tag]/4/np.pi))\
-                                        *detdist[i_tag]/pixsize[i_tag]
-            
-            if qmin_pix is None or qmax_pix is None:
-            
-                assert( qmin is not None)
+            for i_tag, tag in enumerate(tags):
                 
-                assert (qmax is not None)
+                pix2invang  = lambda qpix : np.sin(np.arctan(qpix*pixsize/detdist[i_tag] )/2)\
+                                            *4*np.pi/wavelen[i_tag]
                 
-                qmin_pix = invang2pix (qmin)
+                invang2pix  = lambda qia  : np.tan(2*np.arcsin(qia*wavelen[i_tag]/4/np.pi))\
+                                            *detdist[i_tag]/pixsize
                 
-                qmax_pix = invang2pix (qmax)
-            
+                if qmin_pix is None or qmax_pix is None:
+                
+                    assert( qmin is not None)
+                    
+                    assert (qmax is not None)
+                    
+                    qmin_pix = invang2pix (qmin)
+                    
+                    qmax_pix = invang2pix (qmax)
+                
 #           Initialize the interpolater
-            interpolater  = InterpSimple( x_center, y_center, qmax_pix, qmin_pix, nphi, 
-                                            raw_img_shape=mask.shape )
+                interpolater  = InterpSimple( x_center, y_center, qmax_pix, qmin_pix, nphi, 
+                                                raw_img_shape=mask.shape )
 #           make a polar image mask
-            pmask   = interpolater.nearest( mask , dtype=bool ).round()
+                pmask   = interpolater.nearest( mask , dtype=bool ).round()
 
 #           Make the polar images
-            polar_img = pmask * interpolater.nearest( img_gen.next()) \
-                            * photon_conversion_factor
+                polar_img = pmask * interpolater.nearest( img_gen.next()) \
+                                * photon_conversion_factor[i_tag]
 
-            output_hdf.create_dataset('ring_intensities/%s'%tag, data=polar_img, dtype=np.float32)
-            
-            output_hdf.create_dataset('ring_mask/%s'%tag, data=pmask.astype(np.int8), dtype=np.int8)
-            
-            ring_radii =  np.arange(qmin_pix, qmax_pix) 
-            
-            ring_mag =  np.array( [pix2invang(q_pix)for q_pix in radii])
-            
-            output_hdf.create_dataset( 'ring_radii/%s'%tag, data = ring_radii)
-            
-            output_hdf.create_dataset( 'ring_momentum_transfer/%s'%tag, data = ring_mag)
-           
+                output_hdf.create_dataset('ring_intensities/%s'%tag, data=polar_img, dtype=np.float32)
+                
+                output_hdf.create_dataset('ring_mask/%s'%tag, data=pmask.astype(np.int8), dtype=np.int8)
+                
+                ring_radii =  np.arange(qmin_pix, qmax_pix) 
+                
+                ring_mag =  np.array( [pix2invang(q_pix)for q_pix in ring_radii])
+                
+                output_hdf.create_dataset( 'ring_radii/%s'%tag, data = ring_radii)
+                
+                output_hdf.create_dataset( 'ring_momentum_transfer/%s'%tag, data = ring_mag)
+               
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #============================================================================
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    else: # using default 'fetch' method
-        assert(phi_resolution is not None)
-        
-        assert(q_resolution is not None)
-        
-        assert(ring_locations is not None)
-       
-        fetcher = RingFetch( 
-                    a=x_center, 
-                    b=y_center, 
-                    img_shape=mask.shape,
-                    mask=mask, 
-                    q_resolution=q_resolution, 
-                    phi_resolution=phi_resolution,
-                    pixsize=pixsize, 
-                    interp_method=interp_method, 
-                    index_query_fname=index_query_fname)
-
-        ring_radii = np.zeros( (num_imgs, len(ring_locations) ))
-        ring_mag = np.zeros_like( ring_radii)
-        
-        for i_tag, tag in enumerate(tags):
-
-            fetcher.set_params(wavelen[i_tag], detdist[i_tag])
+        else: # using default 'fetch' method
+            assert(phi_resolution is not None)
             
-            fetcher.set_photon_factor(photon_conversion_factor[i_tag])
+            assert(q_resolution is not None)
             
-            fetcher.set_working_image(img_gen.next() )
+            assert(ring_locations is not None)
+           
+            fetcher = RingFetch( 
+                        a=x_center, 
+                        b=y_center, 
+                        img_shape=mask.shape,
+                        mask=mask, 
+                        q_resolution=q_resolution, 
+                        phi_resolution=phi_resolution,
+                        pixsize=pixsize, 
+                        interp_method=interp_method, 
+                        index_query_fname=index_query_fname)
 
-            intensities = np.zeros((len(ring_locations), fetcher.num_phi_nodes))
+            ring_radii = np.zeros( (num_imgs, len(ring_locations) ))
+            ring_mag = np.zeros_like( ring_radii)
             
-            if radius_unit=='inv_ang':
+            for i_tag, tag in enumerate(tags):
+
+                fetcher.set_params(wavelen[i_tag], detdist[i_tag])
                 
-                for ring_index, ring_q in enumerate( ring_locations):
-                    
-                    intensities[ring_index] = \
-                                fetcher.fetch_a_ring(q=ring_q)
+                fetcher.set_photon_factor(photon_conversion_factor[i_tag])
                 
-                    ring_radii[ i_tag, ring_index  ] = int(round(fetcher.q2r(ring_q)))
-                    
-                    ring_mag[ i_tag, ring_index] = ring_q
-            
-            else:
-                    
-                for ring_index, ring_radius in enumerate( ring_locations):
-                
-                    intensities[ring_index] = \
-                                fetcher.fetch_a_ring(radius=ring_radius)
-                    
-                    ring_radii[ i_tag, ring_index  ] = ring_radius
-                    
-                    ring_mag[ i_tag, ring_index] = fetcher.r2q(ring_radius)
+                fetcher.set_working_image(img_gen.next() )
 
-            output_hdf.create_dataset( 'ring_intensities/%s'%tag,
-                                data = intensities, dtype=np.float32 )
+                intensities = np.zeros((len(ring_locations), fetcher.num_phi_nodes))
+                
+                if radius_unit=='inv_ang':
+                    
+                    for ring_index, ring_q in enumerate( ring_locations):
+                        
+                        intensities[ring_index] = \
+                                    fetcher.fetch_a_ring(q=ring_q)
+                    
+                        ring_radii[ i_tag, ring_index  ] = int(round(fetcher.q2r(ring_q)))
+                        
+                        ring_mag[ i_tag, ring_index] = ring_q
+                
+                else:
+                        
+                    for ring_index, ring_radius in enumerate( ring_locations):
+                    
+                        intensities[ring_index] = \
+                                    fetcher.fetch_a_ring(radius=ring_radius)
+                        
+                        ring_radii[ i_tag, ring_index  ] = ring_radius
+                        
+                        ring_mag[ i_tag, ring_index] = fetcher.r2q(ring_radius)
+
+                output_hdf.create_dataset( 'ring_intensities/%s'%tag,
+                                    data = intensities, dtype=np.float32 )
 
 #       define meta parameters not specified
-        nphi  = intensities.shape[1]
+            nphi  = intensities.shape[1]
+            
+            pmask = np.ones((len(ring_locations), nphi))
         
-        pmask = np.ones((len(ring_locations), nphi))
-    
-        output_hdf.create_dataset( 'ring_radii', data = ring_radii, dtype=np.float32)
-        
-        output_hdf.create_dataset( 'ring_moementum_transfer', data=ring_mag, dtype=np.float32)
-        
-        output_hdf.create_dataset( 'ring_mask', data = pmask.astype(np.int8)) 
+            output_hdf.create_dataset( 'ring_radii', data = ring_radii, dtype=np.float32)
+            
+            output_hdf.create_dataset( 'ring_moementum_transfer', data=ring_mag, dtype=np.float32)
+            
+            output_hdf.create_dataset( 'ring_mask', data = pmask.astype(np.int8)) 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #============================================================================
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    phi_values = np.arange( nphi) * 2 * np.pi / nphi
+        phi_values = np.arange( nphi) * 2 * np.pi / nphi
 
 #   save meta data
-    output_hdf.create_dataset('how', data=how)
-    output_hdf.create_dataset('interp_method', data=interp_method)
-    
-    output_hdf.create_dataset( 'x_center', data = x_center, dtype=np.float32)
-    output_hdf.create_dataset( 'y_center', data = y_center, dtype=np.float32)
-    output_hdf.create_dataset( 'wavelen' , data = wavelen, dtype=np.float32)
-    output_hdf.create_dataset( 'pixsize' , data = pixsize, dtype=np.float32)
-    output_hdf.create_dataset( 'detdist' , data = detdist, dtype=np.float32)
-    output_hdf.create_dataset( 'detgain' , data = detector_gain, dtype=np.float32)
-    output_hdf.create_dataset( 'photon_factor' , data = photon_conversion_factor, dtype=np.float32)
-    output_hdf.create_dataset( 'q_resolution' , data=q_resolution ,dtype=np.float32)
-    output_hdf.create_dataset( 'phi_resolution', data=phi_resolution, dtype=np.float32)
-    output_hdf.create_dataset( 'num_phi', data = nphi, dtype=np.float32)
-    output_hdf.create_dataset( 'ring_phis', data=phi_values, dtype=np.float32 )
+        output_hdf.create_dataset('how', data=how)
+        output_hdf.create_dataset('interp_method', data=interp_method)
+        
+        output_hdf.create_dataset( 'x_center', data = x_center, dtype=np.float32)
+        output_hdf.create_dataset( 'y_center', data = y_center, dtype=np.float32)
+        output_hdf.create_dataset( 'wavelen' , data = wavelen, dtype=np.float32)
+        output_hdf.create_dataset( 'pixsize' , data = pixsize, dtype=np.float32)
+        output_hdf.create_dataset( 'detdist' , data = detdist, dtype=np.float32)
+        output_hdf.create_dataset( 'detgain' , data = detector_gain, dtype=np.float32)
+        output_hdf.create_dataset( 'photon_factor' , data = photon_conversion_factor, dtype=np.float32)
+        output_hdf.create_dataset( 'q_resolution' , data=q_resolution ,dtype=np.float32)
+        output_hdf.create_dataset( 'phi_resolution', data=phi_resolution, dtype=np.float32)
+        output_hdf.create_dataset( 'num_phi', data = nphi, dtype=np.float32)
+        output_hdf.create_dataset( 'ring_phis', data=phi_values, dtype=np.float32 )
 
 #   save
-    print ("saving data to file %s!"%(prefix + '.hdf5'))
-    output_hdf.close()
+        print ("saving data to file %s!"%(prefix + '.hdf5'))
+    #output_hdf.close()
     return prefix + '.hdf5'
 
 
