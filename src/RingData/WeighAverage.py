@@ -2,6 +2,9 @@
 import numpy as np
 import sys
 
+from loki.RingData import InterpCorr
+
+
 
 class WeighAverage:
     def __init__( self, corr, cpsi, interpolated = True):
@@ -146,5 +149,35 @@ class WeighAverage:
             #############################################################################
     
 
+    @staticmethod    
+    def degree_of_ass(diffcorr, wavelen, q_values):
+        """
+        Parameters
+        ==========
+
+        `diffcorr`      has shape Nq x Nphi
+        `wavelen`   is a float in angstroms
+        `q_values`  is a list of q_values corresponding to 
+                    the Nq dimension of diffcorr
+        """
         
+        Nq, Nphi = diffcorr.shape
+
+#       emphasis on "ass" in "ass"-ert
+        assert( Nq == q_values.shape[0] )
+
+        interp_cor = InterpCorr( diffcorr[None,:,:], 
+            wavlen=[wavelen],
+            q_values= np.vstack((q_values, q_values) ).T,
+            num_psi=Nphi )
+       
+        cors, cos_psi = interp_cor.interpolate()
+
+        all_ass = []
+        for iq in xrange(Nq):
+            wa = WeighAverage(cors[:,iq], cos_psi)
+            all_ass.append ( np.sum((wa.corr[:,wa.mapping[:,0]] \
+                                     - wa.corr[:,wa.mapping[:,1]])**2.0, axis = 1))
+        
+        return np.mean( all_ass)
 
