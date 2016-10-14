@@ -27,13 +27,34 @@ class DiffCorr:
         axis = len( ar.shape) -1
         fx = np.fft.rfft( ar, n = n, axis=axis )
         return np.fft.irfft( fx* np.conjugate( fx), n = n,axis=axis)
+    
+    def _fft_crosscorr(self, ar, ar_2 ):
+        n = ar.shape[-1]
+        axis = len( ar.shape) -1
+        fx = np.fft.rfft( ar, n = n, axis=axis )
+        fx_2 = np.fft.rfft( ar_2, n = n, axis=axis )
+        return np.fft.irfft( fx* np.conjugate( fx_2), n=n, axis=axis)
 
-    def autocorr(self): #,num_high=0,num_low=0):
+    def autocorr(self): 
         '''
         Return the difference autocorrelation
         =====================================
-        num_high/num_low - int number of high/low pixels to remove 
-        before correlating
         '''
         self.corr = np.array( [ self._fft_autocorr(s) for s in self.shotsAB ] )
         return self.corr
+    
+    def crosscorr(self, qindex): 
+        '''
+        Correlates ring denoted by qindex with 
+        every other ring (including itself)
+        '''
+        assert( len(self.shotsAB.shape) == 3)
+
+        crosscorrs = []
+        for shot in self.shotsAB:
+#           `shot` has shape (Nq x Nphi)
+            qring = np.vstack( [shot[qindex]]*shot.shape[0] ) 
+            shot_crosscorr = self._fft_crosscorr( qring, shot )
+            crosscorrs.append( shot_crosscorr)
+        return np.array(crosscorrs)
+
