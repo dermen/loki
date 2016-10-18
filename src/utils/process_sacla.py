@@ -270,7 +270,8 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         if how=='polar':
-            
+           
+
             assert( nphi is not None)
             
 
