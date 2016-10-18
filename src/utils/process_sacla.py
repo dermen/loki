@@ -246,12 +246,14 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
 
     num_imgs = len(tags)
 
-    if type(wavelen) == type(detdist) == float:
+    if isinstance(wavelen,(int float, long, complex)) and isinstance(detdist,(int float, long, complex)):
        
         wavelen, detdist = [wavelen]*num_imgs, [detdist]*num_imgs
        
     else:
 
+        assert( isinstance( wavelen, (list, np.ndarray)))
+        assert( isinstance( detdist, (list, np.ndarray)))
         assert( len(wavelen) == len(detdist) ==  num_imgs )
     
     if detector_gain is None:
