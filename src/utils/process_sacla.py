@@ -15,7 +15,7 @@ def imagesFromTags( runfile ,  tagList):
     tagList,    list str, list of run tags
     """
 
-    fh5           = h5py.File( runfile )
+    fh5           = h5py.File( runfile, 'r' )
     run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
     imgs_path     = '/%s/detector_2d_assembled_1'%run_key
     img_gen   = (  fh5[ imgs_path + '/' + tag + '/detector_data' ].value 
@@ -38,7 +38,7 @@ def get_pixel_size(runFile):
 
 def getNorm( runfile, probe=True, pump=False, beam=True):
     
-    fh5           = h5py.File( runfile )
+    fh5           = h5py.File( runfile, 'r' )
     run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
 
     monit_path = '/%s/event_info/bl_3/oh_2/bm_2_pulse_energy_in_joule'%run_key
@@ -71,7 +71,7 @@ def selectImagesSimple( runfile, shutter=1, beam=1,
     beam       bool, 1 for beam up or 0 for beam down
     """
 
-    fh5           = h5py.File( runfile )
+    fh5           = h5py.File( runfile, 'r' )
     run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
     tags          = fh5['/%s/detector_2d_assembled_1'%run_key].keys()[1:]
     beam_stat     = fh5['/%s/event_info/acc/accelerator_status'%run_key].value
@@ -109,7 +109,7 @@ def selectImages(  runfile, probe=True, pump=False, beam=True ):
     pump,      bool, if laser shutter is open or closed
     beam       bool, if xfel beam is on
     """
-    fh5           = h5py.File( runfile )
+    fh5           = h5py.File( runfile , 'r')
     run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
     tags          = fh5['/%s/detector_2d_assembled_1'%run_key].keys()[1:]
     
@@ -240,7 +240,7 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
 
     """
 
-    assert( how in [ 'fetch', 'polar' ] )
+    assert( how in [ 'fetch', 'polar' , 'polar_n'] )
 
     assert( radius_unit in [ 'inv_ang', 'pixels'])
 
@@ -269,10 +269,9 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
 #============================================================================
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        if how=='polar':
+        if how=='polar' or how == 'polar_n':
             
             assert( nphi is not None)
-            
 
             for i_tag, tag in enumerate(tags):
                 
@@ -295,11 +294,18 @@ def interpolate_run (img_gen, tags, mask, x_center, y_center, pixsize,
 #           Initialize the interpolater
                 interpolater  = InterpSimple( x_center, y_center, qmax_pix, qmin_pix, nphi, 
                                                 raw_img_shape=mask.shape )
+
+                if how == 'polar_n':
+                    interpolater.set_polar_tree(index_query_fname, weighted=False)
+                    pmeth = interpolater.nearest_query
+                else:
+                    pmeth = interpolater.nearest
 #           make a polar image mask
-                pmask   = interpolater.nearest( mask , dtype=bool ).round()
+                pmask   = pmeth( mask.astype(float) )  #.round()
+                pmask = pmask.astype(int).astype(bool)
 
 #           Make the polar images
-                polar_img = pmask * interpolater.nearest( img_gen.next()) \
+                polar_img = pmask * pmeth( img_gen.next()) \
                                 * photon_conversion_factor[i_tag]
 
                 output_hdf.create_dataset('ring_intensities/%s'%tag, data=polar_img, dtype=np.float32)

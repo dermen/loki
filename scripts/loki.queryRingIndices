@@ -47,6 +47,21 @@ parser.add_argument(
     required=True)
 
 parser.add_argument(
+    '-rmin', 
+    '--minimum-radius', 
+    type=int, 
+    dest='rmin',
+    help='minimum r where ring indices will be computed',
+    required=True)
+
+parser.add_argument(
+    '-n', 
+    type=int, 
+    dest='nphi',
+    required=False,
+    help='Integer number of phi bins (if using constant)')
+
+parser.add_argument(
     '-p', 
     type=str, 
     dest='prefix',
@@ -68,14 +83,17 @@ args = parser.parse_args()
 #######################
 center = np.load(args.center_filename)
 PT = PolarTree(center[0], center[1], img_shape=(args.Y, args.X), offset_pix=1)
-radii = np.arange(1, args.rmax)
+radii = np.arange(args.rmin, args.rmax)
 
 outfile_name = os.path.join(args.outputDir, "%s.hdf5" % args.prefix)
 outfile = h5py.File(outfile_name, 'w')
 
 print("Mapping indices for the rings...")
 for i, r in enumerate(radii):
-    nphi = int(2 * np.pi * r)
+    if args.nphi is None:
+        nphi = int(2 * np.pi * r)
+    else:
+        nphi = args.nphi
     phi_range = np.linspace(-np.pi, np.pi, nphi)
     ring_points = zip([r] * nphi, phi_range)
 
