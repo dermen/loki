@@ -2,7 +2,7 @@ import h5py
 import numpy as np
 from scipy.ndimage import zoom
 from scipy import spatial
-
+from itertools import izip
 
 class RingFetch:
 
@@ -436,15 +436,46 @@ class InterpSimple:
         data = data_img.ravel()
         return data[self.indices_1d]
 
+    def set_polar_tree( self, index_query_fname, weighted=True): 
+        #self.PT = PolarTree(self.x_center, self.y_center, (self.Y, self.X), offset_pix=offset_pix)
+        #phi_range = np.linspace(-np.pi, np.pi, self.num_phis_ring)
+        #ring_pts = [ zip([r]*self.num_phis_ring, phi_range) 
+        #    for r in np.arange(self.qRmin, self.qRmax)]
+        #self._dists, self._inds =  zip(*[ PT.tree.query(rps, k=4) for rps in ring_pts])
+        
+        qf = h5py.File(index_query_fname, 'r')
+        if weighted:
+            grp = qf['nearest4']
+            self.weighted = True 
+        else:
+            self.weighted = False
+            grp = qf['nearest']
+        self._inds =  [ grp['inds'][r].value   
+            for r in map( str,np.arange(self.qRmin,self.qRmax))]
+        self._dists =  [ grp['dists'][r].value   
+            for r in map( str,np.arange(self.qRmin,self.qRmax))]
+
+    def nearest_query(self, data_img, dtype=np.float32, weighted=True):
+        data = data_img.ravel()
+        if self.weighted:
+            rings = np.array( [ np.average(data[i], axis=1, weights=d/d.sum(1)[:,None]) 
+                for i,d in izip(self._inds, self._dists) ] )
+        else:
+            rings = np.array( [ data[i] for i in self._inds ] )
+        return rings
+
 
 class PolarTree:
-    def __init__(self, a, b, img_shape, offset_pix=False):
+    def __init__(self, a, b, img_shape, offset_pix=False, nphi=None):
         self.img_shape = img_shape
         self._define_polar_indices(a, b, offset_pix)
         self._create_the_tree()
 
+
     def _define_polar_indices(self, a, b, offset_pix):
         Y, X = np.indices(self.img_shape)
+        Y = Y.astype(float)
+        X = X.astype(float)
         if offset_pix:
             a += 0.5
             b += 0.5

@@ -16,11 +16,11 @@ def imagesFromTags(runfile, tagList):
     tagList,    list str, list of run tags
     """
 
-    fh5 = h5py.File(runfile)
-    run_key = [k for k in fh5.keys() if k.startswith('run_')][0]
-    imgs_path = '/%s/detector_2d_assembled_1' % run_key
-    img_gen = (fh5[imgs_path + '/' + tag + '/detector_data'].value
-               for tag in tagList)
+    fh5           = h5py.File( runfile, 'r' )
+    run_key       = [ k for k in fh5.keys() if k.startswith('run_') ][0]
+    imgs_path     = '/%s/detector_2d_assembled_1'%run_key
+    img_gen   = (  fh5[ imgs_path + '/' + tag + '/detector_data' ].value 
+                    for tag in tagList )
     return img_gen
 
 
@@ -266,7 +266,7 @@ def interpolate_run(
 
     """
 
-    assert(how in ['fetch', 'polar'])
+    assert( how in [ 'fetch', 'polar' , 'polar_n'] )
 
     assert(radius_unit in ['inv_ang', 'pixels'])
 
@@ -299,9 +299,9 @@ def interpolate_run(
         #======================================================================
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        if how == 'polar':
-
-            assert(nphi is not None)
+        if how=='polar' or how == 'polar_n':
+            
+            assert( nphi is not None)
 
             for i_tag, tag in enumerate(tags):
 
@@ -322,41 +322,34 @@ def interpolate_run(
                     qmax_pix = invang2pix(qmax)
 
 #           Initialize the interpolater
-                interpolater = InterpSimple(
-                    x_center,
-                    y_center,
-                    qmax_pix,
-                    qmin_pix,
-                    nphi,
-                    raw_img_shape=mask.shape)
+                interpolater  = InterpSimple( x_center, y_center, qmax_pix, qmin_pix, nphi, 
+                                                raw_img_shape=mask.shape )
+
+                if how == 'polar_n':
+                    interpolater.set_polar_tree(index_query_fname, weighted=False)
+                    pmeth = interpolater.nearest_query
+                else:
+                    pmeth = interpolater.nearest
 #           make a polar image mask
-                pmask = interpolater.nearest(mask, dtype=bool).round()
+                pmask   = pmeth( mask.astype(float) )  #.round()
+                pmask = pmask.astype(int).astype(bool)
 
 #           Make the polar images
-                polar_img = pmask * interpolater.nearest( img_gen.next()) \
-                    * photon_conversion_factor[i_tag]
+                polar_img = pmask * pmeth( img_gen.next()) \
+                                * photon_conversion_factor[i_tag]
 
-                output_hdf.create_dataset(
-                    'ring_intensities/%s' %
-                    tag, data=polar_img, dtype=np.float32)
-
-                output_hdf.create_dataset(
-                    'ring_mask/%s' %
-                    tag, data=pmask.astype(
-                        np.int8), dtype=np.int8)
-
-                ring_radii = np.arange(qmin_pix, qmax_pix)
-
-                ring_mag = np.array([pix2invang(q_pix)for q_pix in ring_radii])
-
-                output_hdf.create_dataset(
-                    'ring_radii/%s' %
-                    tag, data=ring_radii)
-
-                output_hdf.create_dataset(
-                    'ring_momentum_transfer/%s' %
-                    tag, data=ring_mag)
-
+                output_hdf.create_dataset('ring_intensities/%s'%tag, data=polar_img, dtype=np.float32)
+                
+                output_hdf.create_dataset('ring_mask/%s'%tag, data=pmask.astype(np.int8), dtype=np.int8)
+                
+                ring_radii =  np.arange(qmin_pix, qmax_pix) 
+                
+                ring_mag =  np.array( [pix2invang(q_pix)for q_pix in ring_radii])
+                
+                output_hdf.create_dataset( 'ring_radii/%s'%tag, data = ring_radii)
+                
+                output_hdf.create_dataset( 'ring_momentum_transfer/%s'%tag, data = ring_mag)
+               
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #============================================================================
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
