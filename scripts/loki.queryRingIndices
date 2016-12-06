@@ -14,7 +14,10 @@ from loki.RingData import PolarTree
 parser = ArgumentParser(
     description='Uses a K-D-Tree to map out indices of intensity rings and saves them to an .hdf5 file')
 
-parser.add_argument(
+
+required = parser.add_argument_group('Required named arguments')
+
+required.add_argument(
     '-o',
     '--outputDir', 
     type=str, 
@@ -22,7 +25,7 @@ parser.add_argument(
     help='Where to store the output data.', 
     required=True)
 
-parser.add_argument(
+required.add_argument(
     '-X', 
     '--fast-dim', 
     type=int,
