@@ -10,6 +10,52 @@ from scipy import optimize
 from scipy.interpolate import interp1d
 from scipy.signal import argrelextrema
 
+from scipy.spatial import distance
+from collections import deque
+
+def _find_min_pairs(eps, eps_order):
+    """parigin hack"""
+    print "----Pairing..."
+    pair_inds = []
+    used_inds = []
+    dists = []
+    for i in xrange(len(eps_order) ):
+        min_row = deque(eps_order[i])
+        min_pair = [i, min_row.popleft() ]
+        while np.any([ind in used_inds 
+                        for ind in min_pair]):
+            try:
+                min_pair = [i, min_row.popleft()]
+            except IndexError:
+                min_pair = None
+                break
+        if min_pair is not None and len(set(min_pair)) > 1:
+            used_inds.extend(min_pair)
+            pair_inds.append(min_pair)
+            dist = eps[min_pair[0], min_pair[1]]
+            dists.append( dist)
+    return pair_inds, dists
+
+def pair_fits(fits):
+    """fits is a array/list of chebyshev fits"""
+    print "----Performing distance calc..."
+    eps = distance.cdist(fits, fits)
+
+    #  Add the max to the diagonal, otherwise the diagonal will
+    #   register as the minimum (each shot is closest to it
+    epsI = 1.1 * eps.max(1) * np.identity(eps.shape[0])
+    eps += epsI
+    #  column 0 is the shot, columns 1->N are the "closest"
+    #  shots, 1 being the closest and N being the furthest
+    eps_order = eps.argsort(1)
+
+    pairs, dists = _find_min_pairs(eps, eps_order) 
+
+    return pairs, dists
+
+
+
+
 
 def is_outlier(points, thresh=3.5):
     """
