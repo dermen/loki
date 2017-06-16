@@ -6,9 +6,7 @@ import os
 import argparse
 import numpy as np
 
-sys.path.append('/reg/neh/home5/qiaoshen/GitHub/thrud')
-
-import InterpSimple
+from loki.RingData import InterpSimple
 
 
 from PSCalib.GeometryAccess import GeometryAccess
@@ -56,7 +54,7 @@ args=parser.parse_args()
 # experimental parameters
 #######
 
-pix_size = 100. # um
+pix_size = 110. # um
 det_dist = args.det_dist # 80000 um
 ring_center = np.load(args.center) #(1731/2, 1738/2) # center of q rings coordinates in pixels 
 #if binning pixels while interpolating, then this need to be centers from binned images

@@ -62,7 +62,7 @@ while True:
         # record the job ids, file names, and time of submission
 
     else:
-        print("Nothing more to submit for yet. Let's wait for 10 seconds")
+        print("Nothing more to submit yet. Let's wait for 10 seconds")
         time.sleep(10) # wait to 10 seconds 
         total_waittime+=10 # add to total wait time for files to be created
         current_filelist = get_current_filelist(run_dir)

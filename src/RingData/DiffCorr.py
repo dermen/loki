@@ -3,7 +3,7 @@ import numpy as np
 import scipy.interpolate as interp
 
 class DiffCorr:
-    def __init__( self, shots, q_values, k,
+    def __init__( self, shots, q_values, k
         ,delta_shot=None,pre_dif=True
         ,generate_mode=False ):
         '''
