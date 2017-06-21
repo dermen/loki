@@ -170,7 +170,7 @@ for nevt,evt in enumerate(ds.events()):
       # create SimpleInterp object if it's the first shot
         img_shape = img.shape
 
-        interpolator = InterpSimple.InterpSimple (ring_center[0], ring_center[1],
+        interpolator = InterpSimple (ring_center[0], ring_center[1],
          qRmax, qRmin,
          num_phi, img_shape,
          bin_fac = bin_fac,
