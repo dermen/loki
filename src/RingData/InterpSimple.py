@@ -88,6 +88,11 @@ class InterpSimple:
 
         data = data_img.ravel()
         return data[self.indices_1d]
+    
+    def nearest_naive_bin(self, data_img):
+    	data_img = self._bin_image_naive(data_img, self.y_centerin_fac)
+	data = data_img.ravel()
+	return data[self.indices_1d]
 
     def _bin_masked_image(self, image, 
                         mask, bin_fac):
@@ -114,6 +119,25 @@ class InterpSimple:
         binned_img = img.reshape([Nsmallx, int(bin_fac), Nsmally, int(bin_fac)]).mean(3).mean(1)
         
         return binned_img.data
+
+    def _bin_image_naive(self, image, bin_fac):
+    
+        # check if shape of image are integer multiples of bin_fac
+	if image.shape[0]%bin_fac or image.shape[1]%bin_fac:
+            x = int( self.Y * bin_fac )
+            y = int( self.X * bin_fac )
+            new_img = np.zeros((x,y), dtype = np.float32)
+            
+            new_img[:image.shape[0],:image.shape[1]] = image
+	else:
+	    new_img = image
+        
+        Nsmallx = int(new_img.shape[0]/bin_fac)
+        Nsmally = int(new_img.shape[1]/bin_fac)
+
+        binned_img = new_img.reshape([Nsmallx, int(bin_fac), Nsmally, int(bin_fac)]).mean(3).mean(1)
+        
+        return binned_img
 
     def set_polar_tree( self, index_query_fname, weighted=True): 
         #self.PT = PolarTree(self.x_center, self.y_center, (self.Y, self.X), offset_pix=offset_pix)
