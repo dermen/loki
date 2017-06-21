@@ -45,7 +45,7 @@ parser.add_argument('-p','--nphi',type=int,
     default = 360, help='number of phi values in the interpolated data')
 
 parser.add_argument('-n', '--num_nodes',
-default=1, type=int, help='number of nodes used in mpirun')
+required=True, type=int, help='number of nodes used in mpirun. \n NEEDS TO MATCH mpirun -n NUM_NODES!!!')
 
 
 args=parser.parse_args()
@@ -105,8 +105,8 @@ run = args.run #117
 if args.max is None:
     max_event = sys.maxint
 else:
-    max_event = args.max
-chunk=  args.chunk # numbrt of shots per chunk
+    max_event = int(args.max/args.num_nodes)
+chunk=  int(args.chunk/args.num_nodes) # numbrt of shots per chunk
 
 # string to data source
 ds_string = 'exp=xpptut15:run=%s:smd' % str(run)
@@ -209,5 +209,5 @@ if shot_counter>0:
     params = {'cspad': {'qPixels':q_inds, 'bin_fac': bin_fac} }
     smldata.save(params)
     smldata.close()
-    print 'SMALLDATA DONE'
+print 'SMALLDATA DONE'
 
