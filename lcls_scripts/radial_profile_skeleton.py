@@ -1,3 +1,9 @@
+"""
+skeleton script for doing peak finding on radial profiles... 
+to help with WAXS analysis
+ -dermendarko@gmail.com
+"""
+
 
 import h5py
 import numpy as np
@@ -5,7 +11,6 @@ from scipy.signal import argrelmax
 
 from loki.RingData import RadialProfile
 from loki.utils.postproc_helper import smooth
-from loki.utils import process_sacla
 
 
 def fit_line(data):
