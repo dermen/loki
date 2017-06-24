@@ -11,8 +11,7 @@ class InterpSimple:
     def __init__(self, a, b, 
         qRmax, qRmin, 
         nphi, raw_img_shape, 
-        bin_fac=None, 
-        use_zoom = True):
+        bin_fac=None:
         '''
         Define a polar image with dimensions: (qRmax-qRmin) x nphi
         ==========================================================
@@ -29,9 +28,7 @@ class InterpSimple:
                         to this class need to be center fitted from images
                         binned by the same bin_fac. Same goes with qRmax,
                         qRmin
-                         
-        use_zoom      - default True, if True, uses scipy zoom to bin
-                        pixels. Else, use bin_masked_image.
+
         '''
         self.x_center = a
         self.y_center = b
@@ -42,15 +39,10 @@ class InterpSimple:
         self.num_phis_ring = nphi
 
         self.y_centerin_fac = bin_fac
-        self.use_zoom = use_zoom
 
         if bin_fac:
-            if use_zoom:
-                self.Y, self.X = zoom(np.random.random(raw_img_shape),
-                                      1. / bin_fac, order=1).shape
-            else:
-                self.Y = int(raw_img_shape[0]/bin_fac)+bool(raw_img_shape[0]%bin_fac)
-                self.X = int(raw_img_shape[1]/bin_fac)+bool(raw_img_shape[1]%bin_fac)
+	    self.Y = int(raw_img_shape[0]/bin_fac)+bool(raw_img_shape[0]%bin_fac)
+	    self.X = int(raw_img_shape[1]/bin_fac)+bool(raw_img_shape[1]%bin_fac)
 
         else:
             self.X = raw_img_shape[1]  # fast dimension
@@ -77,14 +69,12 @@ class InterpSimple:
         '''return a 2d np.array polar image'''
         
         if self.y_centerin_fac:
-            if self.use_zoom:
-                data_img = zoom(data_img, 1. / self.y_centerin_fac, order=1)
-            else:
-                if mask is None:
-                    print ("Need mask if using _bin_masked_image")
-                    return
 
-                data_img = self._bin_masked_image(data_img, mask, self.y_centerin_fac) 
+            if mask is None:
+                print ("Need mask if using _bin_masked_image")
+                return
+
+            data_img = self._bin_masked_image(data_img, mask, self.y_centerin_fac) 
 
         data = data_img.ravel()
         return data[self.indices_1d]
