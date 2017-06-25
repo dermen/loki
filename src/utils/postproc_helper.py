@@ -13,6 +13,8 @@ from scipy.signal import argrelextrema
 from scipy.spatial import distance
 from collections import deque
 
+import numpy.ma as ma
+
 def _find_min_pairs(eps, eps_order):
     """parigin hack"""
     print "----Pairing..."
@@ -529,4 +531,59 @@ def get_NP_sizes(Iphi, wavelen=1.442, q=2.668, k=0.94, rad='sphere'):
     
     return diams
 
+
+def bin_masked_image(image, 
+                    mask, bin_fac):
+    """bins the image using masked array, taking care of the fact that
+    some pixels are masked
+    image - 2d array, image you want to downsize
+    mask - 2d array, pixels to mask
+    bin_fac - factor by which to down size the image
+    """
+    # check if shape of image are integer multiples of bin_fac
+    if image.shape[0]%bin_fac or image.shape[1]%bin_fac:
+        x = int( self.Y * bin_fac )
+        y = int( self.X * bin_fac )
+        new_img = np.zeros((x,y), dtype = np.float64)
+        new_mask = np.zeros((x,y), dtype=np.bool)
+
+        new_img[:image.shape[0],:image.shape[1]] = image
+        new_mask[:image.shape[0],:image.shape[1]] = mask
+
+        img = ma.MaskedArray(new_img, mask = ~new_mask.astype(bool))
+
+
+    else:
+        img = ma.MaskedArray(image, mask = ~mask.astype(bool))
+
+        Nsmallx = int(img.shape[0]/bin_fac)
+        Nsmally = int(img.shape[1]/bin_fac)
+
+    binned_img = img.reshape([Nsmallx, int(bin_fac), Nsmally, int(bin_fac)]).mean(3).mean(1)
+
+    return binned_img.data
+
+def bin_image_naive(image, bin_fac):
+    """bins the image using masked array, taking care of the fact that
+    some pixels are masked
+    image - 2d array, image you want to downsize
+    bin_fac - factor by which to down size the image
+    """
+
+    # check if shape of image are integer multiples of bin_fac
+    if image.shape[0]%bin_fac or image.shape[1]%bin_fac:
+        x = int( self.Y * bin_fac )
+        y = int( self.X * bin_fac )
+        new_img = np.zeros((x,y), dtype = np.float32)
+
+        new_img[:image.shape[0],:image.shape[1]] = image
+    else:
+        new_img = image
+
+        Nsmallx = int(new_img.shape[0]/bin_fac)
+        Nsmally = int(new_img.shape[1]/bin_fac)
+
+    binned_img = new_img.reshape([Nsmallx, int(bin_fac), Nsmally, int(bin_fac)]).mean(3).mean(1)
+
+    return binned_img
 
