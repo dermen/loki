@@ -2,6 +2,8 @@ import h5py
 from loki.RingData import DiffCorr
 import os
 
+import numpy.ma as ma
+
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,8 +58,17 @@ for ll in unique_labels:
     cluster_sizes.append(len(shots_to_grab))
     
     shots = PI[shots_to_grab]
-    # normalize the shots
-    shots -= shots.mean(-1)[:,:,None]
+    # mask and normalize the shots
+    
+    for idx, ss in enumerate(shots):
+
+        mask = make_mask(ss)
+        mask_shot = ma.MaskedArray(ss, ~mask)
+        mask_shot = 
+
+        ss[mask] -= np.mean(ss[mask])
+
+
     dc = DiffCorr(shots, qvalues, 
         k_beam, pre_dif = False)
     corr = dc.autocorr().mean(0)

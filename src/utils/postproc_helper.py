@@ -57,6 +57,29 @@ def pair_fits(fits):
 
 
 
+def make_mask(shot, 
+              zero_sigma = 0.5, 
+              max_sigma = 2.0):
+    """
+    Mask zeros values, realize bright pixels, and pixels close to zeros in shot
+    shot - 2d array to mask, num q by num phi
+    zero_sigma - float, plus-minus value in sigma around zero for a pixel to be masked
+    max_sigma - float, value in sigma more than the mean of shot to be masked
+
+    returns 
+    mask - 2d array, bool, same shape as shot.
+    """
+    mask = np.ones_like(shot)
+    for i, row in enumerate(shot):
+        row_mean = row.mean()
+        row_var = row.std()
+
+        mask[i][row>(row_mean+row_var*max_sigma)] = 0
+        upper = row<(row_var*zero_sigma) 
+        lower = row>(-row_var*zero_sigma)
+        mask[i][upper & lower] = 0
+    return mask.dtype(bool)
+
 
 
 def is_outlier(points, thresh=3.5):
