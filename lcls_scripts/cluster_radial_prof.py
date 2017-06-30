@@ -17,17 +17,34 @@ parser = argparse.ArgumentParser(description='Cluster shots in the same run \n\
 parser.add_argument('-r','--run', type=int,
                    help='run number')
 
+parser.add_argument('-n','--num_clus', type=int,default = 10,
+                   help='number of clusters')
+
+parser.add_argument('-s','--num_shots', type=int,default = None,
+                   help='number of shots to cluster')
+
+
+parser.add_argument('-i','--start_ind', type=int, default = 0,
+                   help='shot index to start with')
+
 
 args = parser.parse_args()
 run_num = args.run
+start_ind = args.start_ind
+num_clusters = args.num_clus
+
+if args.num_shots is None:
+    end_ind = None
+else:
+    end_ind = start_ind + args.num_shots
 # load file
 
 data_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/'
 save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/'
+
 run_file = "run%d.tbl"%run_num
-num_clusters = 10
-start_ind = 1000
-end_ind = 2000
+if end_ind is None:
+    end_ind = int(1e6)
 
 
 f = h5py.File(os.path.join(data_dir, run_file), 'r')
@@ -60,8 +77,6 @@ clustering = AgglomerativeClustering(linkage='average', n_clusters=num_clusters)
 clustering.fit(data)
 
 
-core_samples_mask = np.zeros_like(clustering.labels_, dtype=bool)
-core_samples_mask[a.core_sample_indices_] = True
 
 labels = clustering.labels_
 
@@ -69,6 +84,6 @@ labels = clustering.labels_
 # save tags (which shots are use) and labels (which cluster shots belong to)
 save_file = run_file.replace('.tbl','_cluster.h5')
 f_out = h5py.File(os.path.join(save_dir,save_file), 'w')
-f_out.create_dataset('shot_inds', data = np.array(tags)[start_ind,end_ind])
+f_out.create_dataset('shot_inds', data = np.array(tags)[start_ind:end_ind])
 f_out.create_dataset('cluster_labels',data = labels)
 f_out.close()

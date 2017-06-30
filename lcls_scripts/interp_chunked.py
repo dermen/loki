@@ -20,15 +20,16 @@ parser = argparse.ArgumentParser(description='Analyze a run. Use MPI!')
 parser.add_argument('-r', '--run', type=int, 
     required=True, help='run number to process')
 parser.add_argument('-m', '--max', type=int, 
-    default=None, help='max shots to process')
+    default=None, help='max shots to process. \n script will stop after interpolating this many shots.\n\
+	default is None, which means max is infinity.')
 parser.add_argument('-c', '--chunk', 
-    default=250, type=int, help='shots per sub-file')
+    default=250, type=int, help='shots per sub-file. \n every file saved will have approx. this many shots')
 parser.add_argument('-s','--saveDir',type=str,
     required=True, help='directory in which to save the interpolated data')
 
 
 parser.add_argument('-d','--det_dist',type = float,
-    required=True, help='detector distance in micron (um)')
+    required=True, help='detector distance in MICRON! (um)')
 parser.add_argument('-t','--center',type=str,
     required=True, help='path to .npy file that contains the\
      center of the detector in pixel units')
