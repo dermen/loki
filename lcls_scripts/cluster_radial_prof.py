@@ -27,11 +27,15 @@ parser.add_argument('-s','--num_shots', type=int,default = None,
 parser.add_argument('-i','--start_ind', type=int, default = 0,
                    help='shot index to start with')
 
+parser.add_argument('-m','--method', type=float, default = 'hist',
+                   help='clustering method to use')
+
 
 args = parser.parse_args()
 run_num = args.run
 start_ind = args.start_ind
 num_clusters = args.num_clus
+method = args.method
 
 if args.num_shots is None:
     end_ind = None
@@ -73,12 +77,17 @@ new_rp_protein = pca.fit_transform(rp_protein)
 
 data = new_rp_protein[start_ind:end_ind]
 
-clustering = AgglomerativeClustering(linkage='average', n_clusters=num_clusters)
-clustering.fit(data)
-
-
-
-labels = clustering.labels_
+# histogram on the first PC
+if method=='hist':
+    hist = np.histogram(data[:,0], bins = num_cluster)
+    labels = np.digitize(data[:,0],bins=hist[1],right=True)
+elif method == 'h_average'
+    clustering = AgglomerativeClustering(linkage='average', n_clusters=num_clusters)
+    clustering.fit(data)
+    labels = clustering.labels_
+else:
+    print("ERROR!!! clustering method not available.")
+    sys.exit()
 
 
 # save tags (which shots are use) and labels (which cluster shots belong to)
