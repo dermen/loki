@@ -1,5 +1,6 @@
 import h5py
 from loki.RingData import DiffCorr
+from loki.utils.postproc_helper import *
 import os
 
 import numpy.ma as ma
@@ -8,8 +9,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-parser = argparse.ArgumentParser(description='Cluster shots in the same run \n\
-    by running PCS on radial profs and using hierarchical clustering.')
+parser = argparse.ArgumentParser(description='Compute difference correlation by consecutive pairing.')
 parser.add_argument('-r','--run', type=int,
                    help='run number')
 
@@ -63,10 +63,11 @@ for ll in unique_labels:
     for idx, ss in enumerate(shots):
 
         mask = make_mask(ss)
-        mask_shot = ma.MaskedArray(ss, ~mask)
-        mask_shot = 
+        ss *=mask
+        mean_ss = ss.sum()/mask.sum() 
 
-        ss[mask] -= np.mean(ss[mask])
+        ss[mask] = ss[mask]-mean_ss
+        shots[idx] = ss
 
 
     dc = DiffCorr(shots, qvalues, 

@@ -78,7 +78,7 @@ def make_mask(shot,
         upper = row<(row_var*zero_sigma) 
         lower = row>(-row_var*zero_sigma)
         mask[i][upper & lower] = 0
-    return mask.dtype(bool)
+    return mask.astype(bool)
 
 
 

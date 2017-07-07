@@ -27,7 +27,7 @@ parser.add_argument('-s','--num_shots', type=int,default = None,
 parser.add_argument('-i','--start_ind', type=int, default = 0,
                    help='shot index to start with')
 
-parser.add_argument('-m','--method', type=float, default = 'hist',
+parser.add_argument('-m','--method', type=str, default = 'hist',
                    help='clustering method to use')
 
 
@@ -79,9 +79,9 @@ data = new_rp_protein[start_ind:end_ind]
 
 # histogram on the first PC
 if method=='hist':
-    hist = np.histogram(data[:,0], bins = num_cluster)
+    hist = np.histogram(data[:,0], bins = num_clusters)
     labels = np.digitize(data[:,0],bins=hist[1],right=True)
-elif method == 'h_average'
+elif method == 'h_average':
     clustering = AgglomerativeClustering(linkage='average', n_clusters=num_clusters)
     clustering.fit(data)
     labels = clustering.labels_
