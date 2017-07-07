@@ -7,6 +7,8 @@ import numpy.ma as ma
 
 import argparse
 import numpy as np
+import numpy.ma as ma
+
 import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='Compute difference correlation by consecutive pairing.')
@@ -59,16 +61,12 @@ for ll in unique_labels:
     
     shots = PI[shots_to_grab]
     # mask and normalize the shots
-    
+   
     for idx, ss in enumerate(shots):
-
         mask = make_mask(ss)
-        ss *=mask
-        mean_ss = ss.sum()/mask.sum() 
-
-        ss[mask] = ss[mask]-mean_ss
-        shots[idx] = ss
-
+        mask_shot = ma.MaskedArray(ss,~mask)
+        mask_shot = mask_shot-mask_shot.mean(-1)[:,None]
+        shots[idx] = mask_shot.data*mask
 
     dc = DiffCorr(shots, qvalues, 
         k_beam, pre_dif = False)
