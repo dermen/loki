@@ -64,10 +64,10 @@ for ll in unique_labels:
 
         mask = make_mask(ss)
         ss *=mask
-        mean_ss = ss.sum()/mask.sum() 
+        mean_ss = ss.sum(-1)/mask.sum(-1) 
 
-        ss[mask] = ss[mask]-mean_ss
-        shots[idx] = ss
+        ss = ss-mean_ss[:,None]
+        shots[idx] = ss*mask
 
 
     dc = DiffCorr(shots, qvalues, 
