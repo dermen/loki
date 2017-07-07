@@ -7,6 +7,8 @@ import numpy.ma as ma
 
 import argparse
 import numpy as np
+import numpy.ma as ma
+
 import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='Compute difference correlation by consecutive pairing.')
@@ -59,10 +61,10 @@ for ll in unique_labels:
     
     shots = PI[shots_to_grab]
     # mask and normalize the shots
-    
+   
     for idx, ss in enumerate(shots):
-
         mask = make_mask(ss)
+
         ss *=mask
         mean_ss = ss.sum(-1)/mask.sum(-1) 
 
