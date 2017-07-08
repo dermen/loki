@@ -14,17 +14,47 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser(description='Compute difference correlation by consecutive pairing.')
 parser.add_argument('-r','--run', type=int,
                    help='run number')
+parser.add_argument('-t','--samp_type', type=int,
+                   help='type of data/n \
+# Sample IDs\n\
+# -1: Silver Behenate smaller angle\n\
+# -2: Silver Behenate wider angle\n\
+# 0: GDP buffer\n\
+# 1: ALF BUffer\n\
+# 2: GDP protein\n\
+# 3: ALF protein\n\
+# 4: Water \n\
+# 5: Helium\n\
+# 6: 3-to-1 Recovered GDP')
+
+def sample_type(x):
+    return {-1:'AgB_sml',
+    -2:'AgB_wid',
+     0:'GDP_buf',
+     1:'ALF_buf',
+     2:'GDP_pro',
+     3:'ALF_pro',
+     4:'h2o',
+     5:'he',
+     6:'3to1_rec_GDP_pro'}[x]
 
 
 args = parser.parse_args()
 
 run_num = args.run
-
+if args.samp_type not in [-1,-2,0,1,2,3,4,5,6]:
+    print("Error!!!! type of sample does not exist")
+    sys.exit()
+else:
+    sample = sample_type(args.samp_type)
 # import run file and pairing file
 
 data_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/'
 cluster_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/'
-save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/dif_cor/'
+save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/dif_cor/%s'%sample
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
+
 run_file = "run%d.tbl"%run_num
 cluster_file = "run%d_cluster.h5"%run_num
 

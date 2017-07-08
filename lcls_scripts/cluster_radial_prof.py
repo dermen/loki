@@ -79,7 +79,10 @@ data = new_rp_protein[start_ind:end_ind]
 
 # histogram on the first PC
 if method=='hist':
-    hist = np.histogram(data[:,0], bins = num_clusters)
+    if num_clusters == 0:
+	hist = np.histogram(data[:,0], bins = 'fd')
+    else:
+        hist = np.histogram(data[:,0], bins = num_clusters)
     labels = np.digitize(data[:,0],bins=hist[1],right=True)
 elif method == 'h_average':
     clustering = AgglomerativeClustering(linkage='average', n_clusters=num_clusters)
@@ -89,6 +92,9 @@ else:
     print("ERROR!!! clustering method not available.")
     sys.exit()
 
+unique_labels = set(labels)
+print("Number of clusters: %d"%len(unique_labels))
+print("Total number of shots: %d"%len(labels))
 
 # save tags (which shots are use) and labels (which cluster shots belong to)
 save_file = run_file.replace('.tbl','_cluster.h5')
