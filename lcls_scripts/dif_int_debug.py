@@ -51,7 +51,7 @@ else:
 
 data_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/'
 cluster_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/'
-save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/dif_cor/%s'%sample
+save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/difInt_debug/%s'%sample
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
@@ -71,9 +71,14 @@ PI = f_run['polar_imgs']
 k_beam = 0.0 
 qvalues = np.linspace(0.1,1.5,9)
 
+
+# open save file
+out_file = run_file.replace('.tbl','_difInt.h5')
+f_out = h5py.File(os.path.join(save_dir, out_file),'w')
+
+
 # for each cluster, randomly pair and compute difference int
-cluster_sizes = []
-corrs = []
+
 unique_labels = set(labels)
 for ll in unique_labels:
     print("consolidating cluster %d"%ll)
@@ -101,27 +106,14 @@ for ll in unique_labels:
         ss = ss-mean_ss[:,None]
         shots[idx] = ss*mask
 
+    f_out.create_dataset('difInt_%d'%ll, data = shots)
 
     dc = DiffCorr(shots, qvalues, 
         k_beam, pre_dif = False)
     corr = dc.autocorr().mean(0)
 
-    corrs.append(corr)
+    f_out.create_dataset('difCor_%d'%ll, data = shots)
 
-
-total_shots = np.sum(cluster_sizes).astype(float)
-print ("total number of shots used is %d"%total_shots)
-
-# diff cor for the whole run
-cluster_sizes = np.array(cluster_sizes)/total_shots
-corrs = np.array(corrs)
-ave_corr = (corrs * cluster_sizes[:,None,None]).sum(0)
-
-# save ave diff cor
-out_file = run_file.replace('.tbl','_cor.h5')
-f_out = h5py.File(os.path.join(save_dir, out_file),'w')
-f_out.create_dataset('ave_cor',data = ave_corr)
-f_out.create_dataset('num_shots',data = total_shots)
 f_out.close()
 
 f_cluster.close()
