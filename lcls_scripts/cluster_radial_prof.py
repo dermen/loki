@@ -80,8 +80,10 @@ data = new_rp_protein[start_ind:end_ind]
 # histogram on the first PC
 if method=='hist':
     if num_clusters == 0:
-	hist = np.histogram(data[:,0], bins = 'fd')
+	print("automatically chooseing numbers of cluster")
+        hist = np.histogram(data[:,0], bins = 'fd')
     else:
+	print("binning into %d clusters"%num_clusters)
         hist = np.histogram(data[:,0], bins = num_clusters)
     labels = np.digitize(data[:,0],bins=hist[1],right=True)
 elif method == 'h_average':
