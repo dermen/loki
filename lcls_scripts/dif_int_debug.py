@@ -92,7 +92,6 @@ for ll in unique_labels:
         continue
 	
     shots_to_grab = sorted(shots_to_grab)
-    cluster_sizes.append(len(shots_to_grab))
     
     shots = PI[shots_to_grab]
     # mask and normalize the shots
@@ -110,9 +109,9 @@ for ll in unique_labels:
 
     dc = DiffCorr(shots, qvalues, 
         k_beam, pre_dif = False)
-    corr = dc.autocorr().mean(0)
+    corr = dc.autocorr()
 
-    f_out.create_dataset('difCor_%d'%ll, data = shots)
+    f_out.create_dataset('difCor_%d'%ll, data = corr)
 
 f_out.close()
 
