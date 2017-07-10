@@ -27,6 +27,9 @@ parser.add_argument('-t','--samp_type', type=int,
 # 5: Helium\n\
 # 6: 3-to-1 Recovered GDP')
 
+parser.add_argument('-d','--out_dir', type=str,default = None,
+                   help='output dir to save in, overwrites the sample type dir')
+
 def sample_type(x):
     return {-1:'AgB_sml',
     -2:'AgB_wid',
@@ -51,7 +54,11 @@ else:
 
 data_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/'
 cluster_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/'
-save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/dif_cor/%s'%sample
+if args.out_dir is None:
+    save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/dif_cor/%s'%sample
+else:
+    save_dir = args.out_dir
+
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
