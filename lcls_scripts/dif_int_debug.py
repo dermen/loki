@@ -95,9 +95,12 @@ for ll in unique_labels:
     
     shots = PI[shots_to_grab]
     # mask and normalize the shots
-   
+    
+    if shots.dtype != 'float64':
+        shots = shots.astype(np.float64)
+ 
     for idx, ss in enumerate(shots):
-        mask = make_mask(ss)
+        mask = make_mask(ss,zero_sigma=1.5)
 
         ss *=mask
         mean_ss = ss.sum(-1)/mask.sum(-1) 
