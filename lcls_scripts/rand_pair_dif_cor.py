@@ -30,6 +30,11 @@ parser.add_argument('-t','--samp_type', type=int,
 parser.add_argument('-d','--out_dir', type=str,default = None,
                    help='output dir to save in, overwrites the sample type dir')
 
+parser.add_argument('-z','--zero_sigma', type=float,default = 2.0,
+                   help='masking ceriterion: pixels within zero_sigma standard dev of zero are masked')
+
+
+
 def sample_type(x):
     return {-1:'AgB_sml',
     -2:'AgB_wid',
@@ -99,11 +104,13 @@ for ll in unique_labels:
     shots = PI[shots_to_grab]
     # mask and normalize the shots
     if shots.dtype != 'float64':
+        # shots need to be float64 or more. 
+        # float32 resulted in quite a bit of numerical error 
         shots = shots.astype(np.float64)
     
  
     for idx, ss in enumerate(shots):
-        mask = make_mask(ss,zero_sigma=2.0)
+        mask = make_mask(ss,zero_sigma=args.zero_sigma)
         ss *=mask
         mean_ss = ss.sum(-1)/mask.sum(-1) 
 
@@ -131,6 +138,7 @@ out_file = run_file.replace('.tbl','_cor.h5')
 f_out = h5py.File(os.path.join(save_dir, out_file),'w')
 f_out.create_dataset('ave_cor',data = ave_corr)
 f_out.create_dataset('num_shots',data = total_shots)
+f_out.create_dataset('mask_zero_sigma',data = args.zero_sigma)
 f_out.close()
 
 f_cluster.close()

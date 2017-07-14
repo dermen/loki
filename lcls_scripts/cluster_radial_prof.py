@@ -24,7 +24,7 @@ parser.add_argument('-s','--num_shots', type=int,default = None,
                    help='number of shots to cluster')
 
 
-parser.add_argument('-i','--start_ind', type=int, default = 0,
+parser.add_argument('-i','--start_ind', type=int, default = 200,
                    help='shot index to start with')
 
 parser.add_argument('-m','--method', type=str, default = 'hist',
