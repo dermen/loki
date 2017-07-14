@@ -145,13 +145,15 @@ smldata.save(d)
 
 count = 0
 seen_evts = 0
+idx_seen = []
+idx_saved = []
 
 for i,evt in enumerate(events):
 #   keep this first, i should never be < 0
     if i < start:
         #print ("skipping event %d/%d"%(i+1, start))
         continue
-    
+    idx_seen.append(i)
 
     img = cspad.image(evt)
     
@@ -200,9 +202,11 @@ for i,evt in enumerate(events):
     
     smldata.event(polar_imgs=polar_img_bn.astype(np.float32))
     smldata.event(radial_profs=rad_pro.astype(np.float32))
+    idx_saved.append(i)
     count += 1
     print("Images processed: %d out of %d events..."%(count,i+1))
 
 
-smldata.save()
+smldata.save( {"imgs_seen":np.array(idx_seen),"imgs_saved":np.array(idx_saved)} )
+
 
