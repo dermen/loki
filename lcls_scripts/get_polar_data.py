@@ -43,6 +43,8 @@ parser.add_argument('-s', '--start', type=int, default=0, help='first event to p
 parser.add_argument('-f', '--fname', type=str, default=None, help='output basename')
 parser.add_argument('-b', '--rbins', type=int, required=True, help='number of radial bins')
 parser.add_argument('-p', '--phibins', type=int, default=360, help='number of phi bins')
+parser.add_argument('-rmax', '--interp_rmax', type=int, required=True, help='maximum rmax in pixels to interpolate')
+parser.add_argument('-rmin', '--interp_rmin', type=int, default=100, help='minimum rmin in pixels to interpolate')
 
 
 args = parser.parse_args()
@@ -90,8 +92,8 @@ pk_range = (800, 1045) # radial pixel units, relative to the range of the radial
 rbins =args.rbins
 phibins = args.phibins
 
-interp_rmin = 100
-interp_rmax = 450
+interp_rmin = args.interp_rmin
+interp_rmax = args.interp_rmax
 
 rbin_fct = np.floor( (interp_rmax - interp_rmin) / rbins)
 # adjust so our edge is a multiple of rbin factor
@@ -136,13 +138,18 @@ out_fname = os.path.join( outdir, prefix)
 
 #small dat
 smldata = ds.small_data(out_fname)
+# save some parameters used in interpolation
+d = {'polar_params':{'rmin':interp_rmin,'rmax':interp_rmax,\
+ 'center':cent,'mask':np.array(mask,dtype=int), 'pk_range':pk_range} }
+smldata.save(d)
+
 count = 0
 seen_evts = 0
 
 for i,evt in enumerate(events):
 #   keep this first, i should never be < 0
     if i < start:
-        print ("skipping event %d/%d"%(i+1, start))
+        #print ("skipping event %d/%d"%(i+1, start))
         continue
     
 
