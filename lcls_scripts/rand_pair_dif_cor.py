@@ -27,11 +27,15 @@ parser.add_argument('-t','--samp_type', type=int,
 # 5: Helium\n\
 # 6: 3-to-1 Recovered GDP')
 
-parser.add_argument('-d','--out_dir', type=str,default = None,
+parser.add_argument('-o','--out_dir', type=str,default = None,
                    help='output dir to save in, overwrites the sample type dir')
 
 parser.add_argument('-z','--zero_sigma', type=float,default = 2.0,
                    help='masking ceriterion: pixels within zero_sigma standard dev of zero are masked')
+
+parser.add_argument('-d','--data_dir', type=str, default = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/',
+                   help='where to look for the polar data')
+
 
 
 
@@ -57,7 +61,7 @@ else:
     sample = sample_type(args.samp_type)
 # import run file and pairing file
 
-data_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/'
+data_dir = args.data_dir
 cluster_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/'
 if args.out_dir is None:
     save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/dif_cor/%s'%sample
@@ -78,10 +82,10 @@ tags = f_cluster['shot_inds'].value
 labels = f_cluster['cluster_labels'].value
 # load polar intensity
 PI = f_run['polar_imgs']
-
+num_q = PI.shape[1]
 # compute beam parameters, these are dummy values at the moment
 k_beam = 0.0 
-qvalues = np.linspace(0.1,1.5,9)
+qvalues = np.linspace(0.1,1.5,num_q)
 
 # for each cluster, randomly pair and compute difference int
 cluster_sizes = []

@@ -105,7 +105,7 @@ nphi = int( np.ceil( 2 * np.pi * interp_rmax/phibin_fct)*phibin_fct) # number of
 
 rbin_new = (interp_rmax- interp_rmin ) / rbin_fct
 phibin_new = nphi / phibin_fct 
-binned_pol_img_sh = (rbin_new, phibin_new)
+binned_pol_img_sh = ( int(rbin_new), int(phibin_new) )
 print("polar image dimensions:  %d x %d"%(rbin_new, phibin_new))
 
 Interp = InterpSimple( cent[0], cent[1] , interp_rmax, interp_rmin, nphi, img_sh)  
@@ -145,15 +145,12 @@ smldata.save(d)
 
 count = 0
 seen_evts = 0
-idx_seen = []
-idx_saved = []
 
 for i,evt in enumerate(events):
 #   keep this first, i should never be < 0
     if i < start:
         #print ("skipping event %d/%d"%(i+1, start))
         continue
-    idx_seen.append(i)
 
     img = cspad.image(evt)
     
@@ -199,14 +196,12 @@ for i,evt in enumerate(events):
 # ~~~Interpolation to polar
     polar_img = Interp.nearest( img) * pmask
     polar_img_bn = bin_ndarray( polar_img, binned_pol_img_sh)* pmask_bn
-    
+ 
     smldata.event(polar_imgs=polar_img_bn.astype(np.float32))
     smldata.event(radial_profs=rad_pro.astype(np.float32))
-    idx_saved.append(i)
-    count += 1
+    count+=1
     print("Images processed: %d out of %d events..."%(count,i+1))
 
-
-smldata.save( {"imgs_seen":np.array(idx_seen),"imgs_saved":np.array(idx_saved)} )
+smldata.save()
 
 

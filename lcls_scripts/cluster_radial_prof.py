@@ -30,6 +30,8 @@ parser.add_argument('-i','--start_ind', type=int, default = 200,
 parser.add_argument('-m','--method', type=str, default = 'hist',
                    help='clustering method to use')
 
+parser.add_argument('-d','--data_dir', type=str, default = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/',
+                   help='where to look for the polar data')
 
 args = parser.parse_args()
 run_num = args.run
@@ -43,7 +45,7 @@ else:
     end_ind = start_ind + args.num_shots
 # load file
 
-data_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/'
+data_dir = args.data_dir
 save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/'
 
 run_file = "run%d.tbl"%run_num
