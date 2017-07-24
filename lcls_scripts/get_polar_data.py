@@ -45,6 +45,9 @@ parser.add_argument('-b', '--rbins', type=int, required=True, help='number of ra
 parser.add_argument('-p', '--phibins', type=int, default=360, help='number of phi bins')
 parser.add_argument('-rmax', '--interp_rmax', type=int, required=True, help='maximum rmax in pixels to interpolate')
 parser.add_argument('-rmin', '--interp_rmin', type=int, default=100, help='minimum rmin in pixels to interpolate')
+parser.add_argument('-d', '--out_dir', type=str,default ='/reg/d/psdm/cxi/cxilp6715/scratch/polar_data',
+help='dir in which to store the polar data output')
+
 
 
 args = parser.parse_args()
@@ -125,7 +128,7 @@ events = ds.events()
 cspad = psana.Detector('CxiDs1.0:Cspad.0')
 
 # make some output dir
-outdir = '/reg/d/psdm/cxi/cxilp6715/scratch/polar_data'
+outdir = args.out_dir
 if not os.path.exists(outdir):
     os.makedirs(outdir)
 

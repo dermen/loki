@@ -3,7 +3,7 @@ import tables
 from shutil import copyfile
 import argparse
 
-parser = argparse.ArgumentParser(description='Data grab')
+parser = argparse.ArgumentParser(description='Combining data from serparat h5 files to one big one')
 parser.add_argument('-r', '--run', type=int, required=True, help='run number to process')
 parser.add_argument('-m', '--run_mx', type=int, default=None, help='if not none, understood that use a range of runs')
 parser.add_argument('-d', '--data_dir', type=str, required = True, help='where the data is')
