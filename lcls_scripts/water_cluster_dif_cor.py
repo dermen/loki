@@ -12,14 +12,16 @@ import matplotlib.pyplot as plt
 
 # load the water run
 f = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q/run94.tbl','r')
-f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_dif_int.h5')
+f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_dif_int.h5','w')
 PI = f['polar_imgs']
 
 # get pulse energy, max pos, max height
+print("getting pulse energy per shot...")
 pulse_energy =np.nan_to_num( \
 (f['gas_detector']['f_21_ENRC'].value + f['gas_detector']['f_22_ENRC'].value)/2.)
 
 # extract radial profile max and max pos
+print("getting rad prof max pos and max height vals...")
 num_shots = f['radial_profs'].shape[0]
 max_val = np.zeros(num_shots)
 max_pos = np.zeros(num_shots)
@@ -30,6 +32,7 @@ for idx in range(num_shots):
     max_pos[idx]=y_interp.argmax()
 # cluster by pulse energy
 
+print("clustering by pulse energy...")
 bins = plt.hist(pulse_energy, bins=200)
 pulse_energy_clusters = np.digitize(pulse_energy,bins[1])
 
@@ -47,6 +50,8 @@ for cc in unique_clusters:
 
 # sub cluster by max height
 shot_set_num = 0
+
+print("sorting shots into clusters...")
 for cluster_num in cluster_to_use[:1]:
     shot_tags = np.where(pulse_energy_clusters==cluster_num)[0]
     if len(shot_tags)<2:
