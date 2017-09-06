@@ -54,6 +54,8 @@ parser.add_argument('-e','--end_ind', type=int, default = 350,
 parser.add_argument('-n','--num_clus', type=int,default = 10,
                    help='number of clusters for the 1st PC')
 
+parser.add_argument('-cd','--cheby_fit_deg', type=int,default = 15,
+                   help='degree to which to fit to cheby polynomials for pairing')
 
 def sample_type(x):
     return {-1:'AgB_sml',
@@ -140,6 +142,7 @@ qvalues = np.linspace(0.1,1.5,3)
 # for each cluster, randomly pair and compute difference int
 cluster_sizes = []
 corrs = []
+benchmark_corrs = []
 unique_labels = set(labels)
 for ll in unique_labels:
     print("consolidating cluster %d"%ll)
@@ -185,7 +188,7 @@ for ll in unique_labels:
     del shots
     # pairing with chebyfit polynomials
     # I am going to use the last
-    degree = 15
+    degree = args.cheby_fit_deg
     fits = np.zeros( ( num_shots, shots_merge.shape[-1] ) )
     for ii in range(num_shots):
         _,_,yfit = fit_periodic(shots_merge[ii,2].copy(), 
@@ -205,12 +208,12 @@ for ll in unique_labels:
     pairs_dict = stable.stableroomate(prefs=pref_dict)
 
     pairing = np.array(MakeTagPairs._remove_duplicate_pairs(pairs_dict) )
-    print pairing.shape
+    # print pairing.shape
 
     diff_PI = np.zeros( (num_shots/2, 3, shots_merge.shape[-1]), 
         dtype=np.float64 )
-    print diff_PI.shape
-    print shots_merge[pairing[0][0]].shape
+    # print diff_PI.shape
+    # print shots_merge[pairing[0][0]].shape
     for idx, pp in enumerate( pairing ):
         diff_PI[idx] = shots_merge[pp[0]]-shots_merge[pp[1]]
    
@@ -220,8 +223,14 @@ for ll in unique_labels:
     dc = DiffCorr(diff_PI, qvalues, 
         k_beam, pre_dif = True)
     corr = dc.autocorr().mean(0)
-
     corrs.append(corr)
+
+    diff_shots = shots_merge[1::2]-shots_merge[:-1][::2]
+    dc = DiffCorr(diff_shots, qvalues,
+                       k_beam, pre_dif = True)
+    corr = dc.autocorr().mean(0)
+    benchmark_corrs.append(corr)
+    
 
     cluster_sizes.append(diff_PI.shape[0])
 
@@ -234,11 +243,16 @@ cluster_sizes = np.array(cluster_sizes)/total_shots
 corrs = np.array(corrs)
 ave_corr = (corrs * cluster_sizes[:,None,None]).sum(0)
 
+benchmark_corrs = np.array(benchmark_corrs)
+ave_benchmark_corr = (benchmark_corrs * cluster_sizes[:,None,None]).sum(0)
+
 # save ave diff cor
 out_file = run_file.replace('.tbl','_chebyPair_cor.h5')
 f_out = h5py.File(os.path.join(save_dir, out_file),'w')
 f_out.create_dataset('ave_cor',data = ave_corr)
+f_out.create_dataset('ave_benchmark_cor',data = ave_benchmark_corr)
 f_out.create_dataset('num_shots',data = total_shots)
+f_out.create_dataset('cheby_fit_deg',data = degree)
 f_out.create_dataset('mask_zero_sigma',data = args.zero_sigma)
 f_out.close()
 

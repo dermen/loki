@@ -79,7 +79,7 @@ data_dir = args.data_dir
 if args.out_dir is None:
     save_dir = '/reg/d/psdm/cxi/cxilp6715/scratch/rp_clusters/dif_cor/%s'%sample
 else:
-    save_dir = args.out_dir
+    save_dir = os.path.join( args.out_dir, sample)
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
