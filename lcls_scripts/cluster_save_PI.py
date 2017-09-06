@@ -141,7 +141,6 @@ out_file = run_file.replace('.tbl','_clustered_PI.h5')
 f_out = h5py.File(os.path.join(save_dir, out_file),'w')
 
 
-
 for ll in unique_labels:
     print("consolidating cluster %d"%ll)
     class_member_mask = (labels == ll)

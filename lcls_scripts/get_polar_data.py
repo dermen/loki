@@ -168,32 +168,34 @@ for i,evt in enumerate(events):
 #   WAXS FOR HIT FINDING~~~~~~~~~~~~~~
     rad_pro = rp.calculate(img)[waxs_rmin:waxs_rmax]
     
-#   before peak fitting we smooth
-    #flat_pro = smooth(rad_pro-fit_line(rad_pro), beta=beta, window_size=window_size) 
-    smooth_pro =  smooth(rad_pro, beta=beta, window_size=window_size) 
-    #norm_pro = norm_data(flat_pro)
+    # if this is not a helium run, do the following
+    if run != 96:
+#       before peak fitting we smooth
+        #flat_pro = smooth(rad_pro-fit_line(rad_pro), beta=beta, window_size=window_size) 
+        smooth_pro =  smooth(rad_pro, beta=beta, window_size=window_size) 
+        #norm_pro = norm_data(flat_pro)
 
-#   we can find local maxima in the smoothed normalized radial profiles... 
-    mx = argrelmax(smooth_pro, order=order)[0] 
+#       we can find local maxima in the smoothed normalized radial profiles... 
+        mx = argrelmax(smooth_pro, order=order)[0] 
 
-#   make sure there is only one peak!
-    if not len(mx) == 1:
-        print("found too many maxs")
-        continue
+#       make sure there is only one peak!
+        if not len(mx) == 1:
+            print("found too many maxs")
+            continue
 
-#   make sure the peak lies in the desired range.. 
-    pk_pos = mx[0]
-    if not pk_range[0] < pk_pos < pk_range[1] : 
-        print("max peak is outside of range")
-        continue
+#       make sure the peak lies in the desired range.. 
+        pk_pos = mx[0]
+        if not pk_range[0] < pk_pos < pk_range[1] : 
+            print("max peak is outside of range")
+            continue
 
-#   make sure the peak value is max in the original profile, 
-#   because it was selected using line-subtracted profile
-    pk_val = smooth_pro[ pk_pos] 
-    if not smooth_pro[pk_range[0]] < pk_val and not smooth_pro[pk_range[1]] < pk_val :
-        print("max is not a true max")
-        continue  
-#   if made it this far it is a hit, or maybe helium only.. 
+#       make sure the peak value is max in the original profile, 
+#       because it was selected using line-subtracted profile
+        pk_val = smooth_pro[ pk_pos] 
+        if not smooth_pro[pk_range[0]] < pk_val and not smooth_pro[pk_range[1]] < pk_val :
+            print("max is not a true max")
+            continue  
+#   if made it this far it is a hit, or run 96 helium only.. 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # ~~~Interpolation to polar
