@@ -12,7 +12,11 @@ import matplotlib.pyplot as plt
 
 # load the water run
 f = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q/run94.tbl','r')
-f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_dif_int.h5','w')
+f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_dif_int_basic_pmask_fd.h5','w')
+#######################
+use_basic_mask= True
+pmask_basic = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic.npy')
+#######################
 PI = f['polar_imgs']
 
 # get pulse energy, max pos, max height
@@ -33,7 +37,7 @@ for idx in range(num_shots):
 # cluster by pulse energy
 
 print("clustering by pulse energy...")
-bins = plt.hist(pulse_energy, bins=200)
+bins = np.histogram(pulse_energy, bins=200)
 pulse_energy_clusters = np.digitize(pulse_energy,bins[1])
 
 print "number of clusters: %d" % len ( list(set(pulse_energy_clusters) ) )
@@ -52,7 +56,7 @@ for cc in unique_clusters:
 shot_set_num = 0
 
 print("sorting shots into clusters...")
-for cluster_num in cluster_to_use[:1]:
+for cluster_num in cluster_to_use:
     shot_tags = np.where(pulse_energy_clusters==cluster_num)[0]
     if len(shot_tags)<2:
         print "skipping big cluster %d"%cluster_num
@@ -60,8 +64,9 @@ for cluster_num in cluster_to_use[:1]:
 
     cluster_max_vals = max_val[pulse_energy_clusters==cluster_num]
     cluster_max_pos = max_pos[pulse_energy_clusters==cluster_num]
-
-    bins = plt.hist(cluster_max_vals,bins=5)
+    
+    
+    bins = np.histogram(cluster_max_vals,bins='fd')
     num_shots = np.where(pulse_energy_clusters==cluster_num)[0].shape[0]
     print "number of shots in cluster: %d"% num_shots
     max_val_clusters = np.digitize(cluster_max_vals,bins[1])
@@ -86,7 +91,10 @@ for cluster_num in cluster_to_use[:1]:
         norm_shots = np.zeros_like(shots)
         masked_shots = np.zeros_like(shots)
         for idx, ss in enumerate(shots):
-            mask = make_mask(ss,zero_sigma=1.5)
+            if use_basic_mask:
+                mask = pmask_basic
+            else:
+                mask = make_mask(ss,zero_sigma=0.0)
             ss *=mask
             masked_shots[idx] = ss
 
