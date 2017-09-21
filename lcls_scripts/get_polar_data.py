@@ -207,6 +207,8 @@ for i,evt in enumerate(events):
     count+=1
     print("Images processed: %d out of %d events..."%(count,i+1))
 
+smldata.save(polar_mask_binned=pmask_bn.astype(int))
+smldata.save(polar_mask=pmask.astype(int))
 smldata.save()
 
 

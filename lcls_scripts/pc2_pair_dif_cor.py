@@ -11,6 +11,7 @@ import numpy as np
 import numpy.ma as ma
 
 import matplotlib.pyplot as plt
+import sys
 
 parser = argparse.ArgumentParser(description='Compute difference correlation by consecutive pairing.')
 parser.add_argument('-r','--run', type=int,
@@ -154,15 +155,6 @@ for ll in unique_labels:
         # shots need to be float64 or more. 
         # float32 resulted in quite a bit of numerical error 
         shots = shots.astype(np.float64)
-    
- 
-    for idx, ss in enumerate(shots):
-        mask = make_mask(ss,zero_sigma=args.zero_sigma)
-        ss *=mask
-        mean_ss = ss.sum(-1)/mask.sum(-1) 
-
-        ss = ss-mean_ss[:,None]
-        shots[idx] = np.nan_to_num(ss*mask)
 
     # use 2nd PC to pair and do diff corr
 
@@ -173,18 +165,60 @@ for ll in unique_labels:
     pairing = pc2_rank.reshape(( pc2_rank.size/2, 2))
 
     diff_PI = np.zeros( (pairing.shape[0], num_q, shots.shape[-1] ), dtype=np.float64 )
+    diff_mask = np.zeros( (pairing.shape[0], num_q, shots.shape[-1] ), dtype=int )
 
     for idx, pp in enumerate( pairing ):
-        diff_PI[idx] = shots[pp[0]]-shots[pp[1]]
+        shot_i = shots[pp[0]]
+        shot_j= shots[pp[1]]
+
+        mask_i= make_mask(  shot_i,zero_sigma=args.zero_sigma)
+        shot_i *=mask_i
+        mean_ss = shot_i.sum(-1)/mask_i.sum(-1) 
+        shot_i = np.nan_to_num( (shot_i-mean_ss[:,None]) * mask_i)
+
+        mask_j= make_mask(  shot_j,zero_sigma=args.zero_sigma)
+        shot_j *=mask_j
+        mean_ss = shot_j.sum(-1)/mask_j.sum(-1) 
+        shot_j = np.nan_to_num( (shot_j-mean_ss[:,None]) * mask_j)
+
+        diff_mask[idx] = mask_i*mask_j
+
+        diff_PI[idx] = shot_i-shot_j
 
 
     dc = DiffCorr(diff_PI, qvalues, 
         k_beam, pre_dif = True)
-    corr = dc.autocorr().mean(0)
+    PI_corr = dc.autocorr()
+
+    mask_dc = DiffCorr(diff_mask, qvalues, 
+        k_beam, pre_dif = True)
+    mask_corr = mask_dc.autocorr()
+    #print mask_corr.shape
+    #print PI_corr.shape
+    #np.save('PI_corr.npy',PI_corr)
+    #np.save('mask_corr.npy',mask_corr)
+
+
+    # deal with the mask part
+    #corr = np.nan_to_num((PI_corr/mask_corr)).mean(0)
+    corr = PI_corr/mask_corr
+    corr[corr==np.inf] = 0
+    corr[corr==-np.inf] = 0
+    corr = np.nan_to_num(corr)
+    corr = corr.mean(0)
+
+    #print corr.mean()
+    #sys.exit()
+    num_shots_in_cluster = diff_PI.shape[0]
+    # clean house
+    del PI_corr
+    del mask_corr
+    del diff_mask
+    del diff_PI
 
     corrs.append(corr)
 
-    cluster_sizes.append(diff_PI.shape[0])
+    cluster_sizes.append(num_shots_in_cluster)
 
 
 total_shots = np.sum(cluster_sizes).astype(float)
