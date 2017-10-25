@@ -28,7 +28,7 @@ def combine_files(run, dirpath,save_dir):
 
 #   load files and sort numerically
     fnames = [ os.path.join(dirpath, f) for f in os.listdir(dirpath)
-        if f.startswith('run%d'%run) and f.endswith('h5') ]
+        if f.startswith('run%d_'%run) and f.endswith('h5') ]
 
     if not fnames:
         print("No filenames for run %d"%run)
@@ -51,7 +51,7 @@ def combine_files(run, dirpath,save_dir):
 #   this gets every EArray path in the file (data is stored as EArrays.. 
     get_array_paths = lambda PyTable:  [s.split()[0] 
         for s in str(PyTable).split('\n') if 'EArray' in s]
-
+    
 #   this is the master file we will append to
     with tables.File(newfname, 'r+') as tbl:
 
@@ -74,6 +74,7 @@ def combine_files(run, dirpath,save_dir):
                 return None
             
             for path in next_array_paths:
+
                 tbl.get_node(path).append( next_tbl.get_node(path)[:] )
 
 # combines files
