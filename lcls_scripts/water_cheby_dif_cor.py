@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 
 
-def pair_diff_PI(max_pos_cluster_shots, 
+def pair_diff_PI(max_pos_cluster_shots, mask,
     degree = 15, 
     qidx_pair = 25):
     print("doing cheby pairing...")
@@ -27,9 +27,13 @@ def pair_diff_PI(max_pos_cluster_shots,
     fits = np.zeros( (max_pos_cluster_shots.shape[0],
         max_pos_cluster_shots.shape[-1])
         ,dtype = np.float64 )
+
     for ii in range(max_pos_cluster_shots.shape[0]):
-        _,_,yfit = fit_periodic(max_pos_cluster_shots[ii,qidx_pair].copy(), 
-            mask=np.ones(max_pos_cluster_shots.shape[-1],dtype=bool),
+        shot,_,_ = remove_peaks(max_pos_cluster_shots[ii,qidx_pair].copy(),
+            mask[qidx_pair])
+
+        _,_,yfit = fit_periodic(shot, 
+            mask=mask[qidx_pair],
                 deg=degree,overlap=0.1)
         fits[ii] = yfit
     
@@ -62,11 +66,11 @@ def pair_diff_PI(max_pos_cluster_shots,
 # load the water run
 qidx4pairing = int(sys.argv[1])
 f = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q/run94.tbl','r')
-f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_cheby_corr_%d.h5'%qidx4pairing,'w')
+f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_cheby_corr_%d_fitPeakRemove.h5'%qidx4pairing,'w')
 #######################
 use_basic_mask= True
 
-pmask_basic = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic.npy')
+pmask_basic = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_remove_peak.npy')
 #######################
 PI = f['polar_imgs']
 
@@ -115,26 +119,24 @@ for cluster_num in cluster_to_use:
         print "skipping big cluster %d"%cluster_num
         continue
 
-    cluster_max_vals = max_val[pulse_energy_clusters==cluster_num]
     cluster_max_pos = max_pos[pulse_energy_clusters==cluster_num]
     
     
-    bins = np.histogram(cluster_max_vals,bins='fd')
+    bins = np.histogram(cluster_max_pos,bins='fd')
     num_shots = np.where(pulse_energy_clusters==cluster_num)[0].shape[0]
     print "number of shots in cluster: %d"% num_shots
-    max_val_clusters = np.digitize(cluster_max_vals,bins[1])
-    unique_clusters = np.array(sorted(list(set(max_val_clusters))) )
+    max_pos_clusters = np.digitize(cluster_max_pos,bins[1])
+    unique_clusters = np.array(sorted(list(set(max_pos_clusters))) )
 
     for cc in unique_clusters:
-        cluster_shot_tags = shot_tags[max_val_clusters==cc]
+        cluster_shot_tags = shot_tags[max_pos_clusters==cc]
         if len(cluster_shot_tags)<2:
             print "skipping little cluster %d in big cluster %d"%(cc,cluster_num)
             continue
 
         order = np.argsort(cluster_shot_tags)
         shots = PI[sorted(cluster_shot_tags)]
-        max_pos_set = cluster_max_pos[max_val_clusters==cc][order]
-
+        print "number of shots in pairing cluster: %d"% len(cluster_shot_tags)
         # mask and normalize the shots
         if shots.dtype != 'float64':
             # shots need to be float64 or more. 
@@ -157,30 +159,12 @@ for cluster_num in cluster_to_use:
 
         #clean up a bit
         del shots
-
-
-        ###############################
-        # if shot set is large enough, histogram by max_pos_set
-
-        if norm_shots.shape[0]>100:
-            max_pos_bins = np.histogram(max_pos_set,bins='fd')
-            max_pos_clusters = np.digitize(max_pos_set,max_pos_bins[1])
-            max_pos_unique_clusters = np.array(sorted(list(set(max_pos_clusters))) )
-
-            for max_pos_cc in max_pos_unique_clusters:
-                print ("in MAX POS cluster %d"%max_pos_cc)
-                max_pos_cluster_shots = norm_shots[max_pos_clusters==max_pos_cc]
-                if max_pos_cluster_shots.shape[0]<2:
-                    continue
-                # pair to get diff intensity
-                diff_norm = pair_diff_PI(max_pos_cluster_shots,
-                 qidx_pair = qidx4pairing)
-
-
-        ###############################
-        else:
-            # simply cheby pair
-            diff_norm = pair_diff_PI(norm_shots,
+        # for sanity check only
+        # if norm_shots.shape[0]%2>0:
+        #     norm_shots = norm_shots[:-1]
+        # diff_norm=norm_shots[::2]-norm_shots[1::2]
+        
+        diff_norm = pair_diff_PI(norm_shots, pmask_basic,
                 qidx_pair = qidx4pairing)
 
         # dummy qvalues
@@ -191,9 +175,9 @@ for cluster_num in cluster_to_use:
         shot_nums_per_set.append(diff_norm.shape[0])
 
         # save difference int
-        f_out.create_dataset('norm_diff_%d'%shot_set_num, data = diff_norm)
+        # f_out.create_dataset('norm_diff_%d'%shot_set_num, data = diff_norm)
         # 
-        shot_set_num+=1
+        # shot_set_num+=1
     ##############
     # Dubgging
     # break
