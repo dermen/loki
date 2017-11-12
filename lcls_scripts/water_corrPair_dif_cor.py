@@ -62,8 +62,8 @@ def pair_diff_PI(norm_shots, mask,
 
 # load the water run
 qidx4pairing = int(sys.argv[1])
-f = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q/run50.tbl','r')
-f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/corr_pair/run50_corrPair_corr_%d.h5'%qidx4pairing,'w')
+f = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q/run94.tbl','r')
+f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_corrPair_corr_%d.h5'%qidx4pairing,'w')
 #######################
 use_basic_mask= True
 
@@ -168,10 +168,13 @@ for cluster_num in cluster_to_use:
         # dummy qvalues
         qs = np.linspace(0.1,1.0, diff_norm.shape[1])
         dc = DiffCorr(diff_norm, qs, 0,pre_dif=True)
-        ac = dc.autocorr().mean(0)
-        norm_corrs.append(ac)
+        ac = dc.autocorr()
+        norm_corrs.append(ac.mean(0))
         shot_nums_per_set.append(diff_norm.shape[0])
 
+        f_out.create_dataset('autocorr_%d'%shot_set_num, data = ac)
+
+        shot_set_num+=1
         # save difference int
         # f_out.create_dataset('norm_diff_%d'%shot_set_num, data = diff_norm)
         # 
