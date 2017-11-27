@@ -81,6 +81,10 @@ parser.add_argument('-o','--out_dir', type=str,default = None,
 parser.add_argument('-d','--data_dir', type=str, default = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/',
                    help='where to look for the polar data')
 
+
+parser.add_argument('-s','--save_ac', type=bool, default = False,
+                   help='if True will save all the individual auto corrs')
+
 def sample_type(x):
     return {-1:'AgB_sml',
     -2:'AgB_wid',
@@ -94,7 +98,7 @@ def sample_type(x):
 
 
 args = parser.parse_args()
-
+save_all_ac = args.save_ac
 
 # in this script, I will cluster by correlations from single intensities
 # the logic is that correlation curves from single intensities will exibihit mostly artifacts
@@ -123,13 +127,15 @@ run_file = "run%d.tbl"%run_num
 f = h5py.File(os.path.join(data_dir, run_file), 'r')
 
 # output file to save data
-out_file = run_file.replace('.tbl','_cor.h5')
+out_file = run_file.replace('.tbl','_cor2.h5')
 f_out = h5py.File(os.path.join(save_dir, out_file),'w')
 
-if 'polar_mask_binned' in f.keys():
-    mask = np.array(f['polar_mask_binned'].value==f['polar_mask_binned'].value.max(), dtype = int)
-else:
-    mask = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic.npy')
+# if 'polar_mask_binned' in f.keys():
+#     mask = np.array(f['polar_mask_binned'].value==f['polar_mask_binned'].value.max(), dtype = int)
+
+# else:
+#     mask = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic.npy')
+mask = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic_highq.npy')
 #load q values
 qs = np.load(os.path.join( args.data_dir, 'qvalues.npy') )
 
@@ -250,8 +256,8 @@ for cluster_num in cluster_to_use:
         ac = dc.autocorr() / mask_corr[:,qpair_inds,:]
         norm_corrs.append(ac.mean(0))
         shot_nums_per_set.append(diff_norm.shape[0])
-
-        f_out.create_dataset('autocorr_%d'%shot_set_num, data = ac)
+        if save_all_ac:
+            f_out.create_dataset('autocorr_%d'%shot_set_num, data = ac)
 
         shot_set_num+=1
         # save difference int
@@ -270,16 +276,17 @@ f_out.create_dataset('ave_norm_corr',data=ave_norm_corr)
 f_out.create_dataset('num_shots',data=np.sum(shot_nums_per_set))
 f_out.create_dataset('qvalues',data=qs[qpair_inds])
 
-print("cleaning up and closing file...")
-corr_keys = [kk for kk in f_out.keys() if kk.startswith('autocorr')]
-all_corrs=[]
-# Consolidate and delete individual datasets
-for key in corr_keys:
-  all_corrs.append(f_out[key].value)
+if save_all_ac:
+    print("cleaning up and closing file...")
+    corr_keys = [kk for kk in f_out.keys() if kk.startswith('autocorr')]
+    all_corrs=[]
+    # Consolidate and delete individual datasets
+    for key in corr_keys:
+      all_corrs.append(f_out[key].value)
 
-  f_out.__delitem__(key)
+      f_out.__delitem__(key)
 
-all_corrs=np.concatenate(all_corrs)
-f_out.create_dataset('all_autocorrs',data=all_corrs)
+    all_corrs=np.concatenate(all_corrs)
+    f_out.create_dataset('all_autocorrs',data=all_corrs)
 
 f_out.close()
