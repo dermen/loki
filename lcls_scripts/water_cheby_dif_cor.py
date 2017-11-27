@@ -65,12 +65,12 @@ def pair_diff_PI(max_pos_cluster_shots, mask,
 
 # load the water run
 qidx4pairing = int(sys.argv[1])
-f = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q/run94.tbl','r')
-f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_cheby_corr_%d_fitPeakRemove.h5'%qidx4pairing,'w')
+f = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q/higher_q/run94.tbl','r')
+f_out = h5py.File('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/run94_cheby_corr_%d_.h5'%qidx4pairing,'w')
 #######################
 use_basic_mask= True
 
-pmask_basic = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_remove_peak.npy')
+pmask_basic = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic_higherq.npy')
 #######################
 PI = f['polar_imgs']
 
