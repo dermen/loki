@@ -63,7 +63,7 @@ img_sh = (1734, 1731)
 
 # point where forward beam intersects detector
 cent_fname = '/reg/data/ana14/cxi/cxilp6715/scratch/bin/center.npy'
-mask_fname = '/reg/data/ana14/cxi/cxilp6715/scratch/bin/mask_rough2.npy'
+mask_fname = '/reg/data/ana14/cxi/cxilp6715/scratch/bin/mask_rough3.npy'
 cent = np.load( cent_fname)
 mask = np.load( mask_fname) 
 
