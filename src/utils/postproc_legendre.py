@@ -67,3 +67,4 @@ def get_cpsi(num_phi, wavlen, q1, q2):
     cpsi = np.cos(phis) * np.cos(th1)*np.cos(th2) + np.sin(th1)*np.sin(th2)
 
     return cpsi
+
