@@ -72,6 +72,9 @@ def make_streak_mask(shots, num_bins=100):
     
     streak_mask=np.ones_like(shots[0])
     for cc in chunks:
+        
+        cc=np.array(cc)
+        cc=cc[cc<streak_mask.size]
         streak_mask[cc] =  0
     return streak_mask.astype(bool)
 
@@ -140,13 +143,13 @@ f_out = h5py.File(os.path.join(save_dir, out_file),'w')
 
 
 if 'polar_mask_binned' in f.keys():
-    mask = np.array(f['polar_mask_binned'].value==f['polar_mask_binned'].value.max(), dtype = int)[:4,:]
+    mask = np.array(f['polar_mask_binned'].value==f['polar_mask_binned'].value.max(), dtype = int)
 else:
-    mask = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic.npy')[:4,:]
+    mask = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic.npy')
 
 PI = f['polar_imgs']
 
-qs = np.array([0.2,0.22,0.24,0.26])
+qs = np.linspace(0.2,0.88,35)
 
 # get pulse energy, max pos, max height
 print("getting pulse energy per shot...")
@@ -176,7 +179,7 @@ unique_clusters = np.array( sorted( list(set(ave_shot_energy_clusters)) ) )
 energy_treshold = 25000 # arbitrary units after polar interpolation 
 for cc in unique_clusters:
     mean_energy = np.mean ( ave_shot_energy[ave_shot_energy_clusters==cc] )
-    if mean_pulse<pulse_treshold:
+    if mean_energy<energy_treshold:
         continue
     else:
         cluster_to_use = unique_clusters[unique_clusters>=cc]
@@ -198,10 +201,11 @@ for cluster_num in cluster_to_use:
     
     num_shots = np.where(ave_shot_energy_clusters==cluster_num)[0].shape[0]
     print "number of shots in cluster: %d"% num_shots
-    #####Start here!!!
-    ###########################################
-    cluster_max_pos = max_pos[pulse_energy_clusters==cluster_num]
-    rad_profs=interp_rps[pulse_energy_clusters==cluster_num]
+
+
+    cluster_max_pos = max_pos[ave_shot_energy_clusters==cluster_num]
+    # print cluster_max_pos
+    rad_profs=interp_rps[ave_shot_energy_clusters==cluster_num]
 
     bins = np.histogram(cluster_max_pos,bins='fd')
     max_pos_clusters = np.digitize(cluster_max_pos,bins[1])
@@ -214,8 +218,8 @@ for cluster_num in cluster_to_use:
             continue
 
         order = np.argsort(cluster_shot_tags)
-        shots = PI[sorted(cluster_shot_tags)][:,:4,:]
-
+        shots = PI[sorted(cluster_shot_tags)]
+        # print rad_profs[max_pos_clusters==cc].shape
         rad_profs_set = rad_profs[max_pos_clusters==cc][order]
         print rad_profs_set.shape, shots.shape
 
@@ -227,15 +231,20 @@ for cluster_num in cluster_to_use:
             shots = shots.astype(np.float64)
         
         norm_shots = np.zeros_like(shots)
+        streak_masks = np.zeros( (shots.shape[0],shots.shape[-1]), dtype = bool )
         
         for idx, ss in enumerate(shots):
-
-            ss *=mask
+            sm = make_streak_mask(ss[None,0,:].copy())
+            streak_masks[idx] = sm
+            this_mask=mask.copy()
+            this_mask[:4,:] = this_mask[:4,:]*sm[None,:]
             
-            mean_ss = ss.sum(-1)/mask.sum(-1) 
+            ss *= this_mask
+            
+            mean_ss = ss.sum(-1)/this_mask.sum(-1) 
 
             ss = ss-mean_ss[:,None]
-            norm_shots[idx] = np.nan_to_num(ss*mask)
+            norm_shots[idx] = np.nan_to_num(ss*this_mask)
 
         #clean up a bit
         del shots
@@ -249,18 +258,32 @@ for cluster_num in cluster_to_use:
 
         diff_norm, pairing = pair_diff_PI(norm_shots, rad_profs_set,qs)
         diff_pair = np.zeros( (diff_norm.shape[0] , 2 ))
-        # print cluster_shot_tags
+        diff_streak_masks = np.zeros( (diff_norm.shape[0] , diff_norm.shape[-1] ),dtype=bool)
+
         for index, pp in enumerate( pairing ):
             diff_pair[index,0] = cluster_shot_tags[pp[0]]
             diff_pair[index,1] = cluster_shot_tags[pp[1]]
+            diff_streak_masks[index] = streak_masks[pp[0]]*streak_masks[pp[1]]
 
+        
         dc = DiffCorr(diff_norm, qs, 0,pre_dif=True)
+        all_diff_masks=np.array([mask]*diff_norm.shape[0])
+        all_diff_masks[:,:4,:]= diff_streak_masks[:,None,:]*all_diff_masks[:,:4,:]
+        mask_dc= DiffCorr(all_diff_masks.copy(),qs,0,pre_dif=True)
+        mask_corr = mask_dc.autocorr()
+        print "mask corr shape:"
+        print mask_corr.shape
+
         ac = dc.autocorr() / mask_corr
         norm_corrs.append(ac.mean(0))
         shot_nums_per_set.append(diff_norm.shape[0])
         f_out.create_dataset('pairing_%d'%shot_set_num, data = diff_pair)
+        f_out.create_dataset('streak_masks_%d'%shot_set_num, data = streak_masks)
+
         if args.save_autocorr:
             f_out.create_dataset('autocorr_%d'%shot_set_num, data = ac)
+        del streak_masks
+        del ac
 
         shot_set_num+=1
         # save difference int
@@ -278,6 +301,7 @@ ave_norm_corr = (norm_corrs * \
 f_out.create_dataset('ave_norm_corr',data=ave_norm_corr)
 f_out.create_dataset('num_shots',data=np.sum(shot_nums_per_set))
 f_out.create_dataset('qvalues',data=qs)
+f_out.create_dataset('basic_mask',data=mask)
 
 pair_keys = [kk for kk in f_out.keys() if kk.startswith('pairing')]
 all_pairing=[]
@@ -289,6 +313,18 @@ for key in pair_keys:
 
 all_pairing=np.concatenate(all_pairing)
 f_out.create_dataset('all_pairings',data=all_pairing)
+
+
+sm_keys = [kk for kk in f_out.keys() if kk.startswith('streak')]
+all_streak_masks=[]
+# Consolidate and delete individual datasets
+for key in sm_keys:
+  all_streak_masks.append(f_out[key].value)
+
+  f_out.__delitem__(key)
+
+all_streak_masks=np.concatenate(all_streak_masks)
+f_out.create_dataset('all_streak_masks',data=all_streak_masks)
 # print all_pairing
 
 if args.save_autocorr:
