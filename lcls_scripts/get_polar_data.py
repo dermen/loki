@@ -47,6 +47,9 @@ parser.add_argument('-rmax', '--interp_rmax', type=int, required=True, help='max
 parser.add_argument('-rmin', '--interp_rmin', type=int, default=100, help='minimum rmin in pixels to interpolate')
 parser.add_argument('-d', '--out_dir', type=str,default ='/reg/d/psdm/cxi/cxilp6715/scratch/polar_data',
 help='dir in which to store the polar data output')
+parser.add_argument('-mf', '--mask_file', type=str,
+    default ='/reg/data/ana14/cxi/cxilp6715/scratch/shared_files/mask_rough3.npy',
+    help=".npy file containing mask for the polar data")
 
 
 
@@ -62,8 +65,8 @@ start = args.start
 img_sh = (1734, 1731)
 
 # point where forward beam intersects detector
-cent_fname = '/reg/data/ana14/cxi/cxilp6715/scratch/bin/center.npy'
-mask_fname = '/reg/data/ana14/cxi/cxilp6715/scratch/bin/mask_rough3.npy'
+cent_fname = '/reg/data/ana14/cxi/cxilp6715/scratch/shared_files/center.npy'
+mask_fname = args.mask_file
 cent = np.load( cent_fname)
 mask = np.load( mask_fname) 
 
