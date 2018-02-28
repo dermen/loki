@@ -38,6 +38,12 @@ parser.add_argument('-d','--data_dir', type=str, required=True,
 parser.add_argument('-n','--diff_norm', type=str, required=True,
                    help='if yes, subtract the normalized versions of protein from buffer')
 
+parser.add_argument('-c','--n_cluster', type=int, default=20,
+                   help='number of clusters to use in the kmeans clustering of PCA cluster average')
+
+parser.add_argument('-p','--phi_offset', type=int, default=15,
+                   help='number of phi pixels to ignore')
+
 def sample_type(x):
     return {-1:'AgB_sml',
     -2:'AgB_wid',
@@ -80,7 +86,7 @@ else:
     sample = sample_type(args.samp_type)
     if sample=='GDP_pro':
         buffer_name = 'GDP_buf'
-    if sample=='ALF_buf':
+    if sample=='ALF_pro':
         buffer_name = 'ALF_buf'
 
 
@@ -100,16 +106,14 @@ f_out = h5py.File(os.path.join(save_dir, out_file),'w')
 print('saving results in %s'%out_file)
 
 
-f_ALF = h5py.File(os.path.join(ALFpro_dir,'run%d_cor.h5'%run_num),'r')
+f_ALF = h5py.File(os.path.join(pro_dir,'run%d_cor.h5'%run_num),'r')
 q_keys= f_ALF.keys()
 q_inds= [int(kk.split('q')[-1]) for kk in q_keys ]
 
-if buffer_name == 'GDP_buf':
-    f_ALFbuf = h5py.File(os.path.join(ALFbuf_dir,'run49_cor.h5'),'r')
-if buffer_name == 'ALF_buf':
-    f_ALFbuf = h5py.File(os.path.join(ALFbuf_dir,'run13_cor.h5'),'r')
 
-phi_offset = 15
+f_ALFbuf = h5py.File(os.path.join(buf_dir,'all_difcor.h5'),'r')
+
+phi_offset = args.phi_offset
 num_phi = f_ALF[q_keys[0]]['ave_norm_corr'].shape[-1]
 
 for qidx in q_inds:
@@ -120,7 +124,7 @@ for qidx in q_inds:
     ALFpro_difcor_keys = [k for k in f_ALF['q%d'%(qidx)].keys() if k.endswith('difcors')]
 
     for kk in ALFpro_difcor_keys:
-        x= f_ALF['q%d'%(10+qidx)][kk].value[:,phi_offset:num_phi/2-phi_offset]
+        x= f_ALF['q%d'%(qidx)][kk].value[:,phi_offset:num_phi/2-phi_offset]
         cluster_aves.append(x.mean(0))
         del x
     ALFpro_corrPair_cluster_ave =np.array(cluster_aves)
@@ -130,7 +134,7 @@ for qidx in q_inds:
     cluster_aves=[]
 
     for kk in ALFbuf_difcor_keys:
-        x =f_ALFbuf['q%d'%(10+qidx)][kk].value[:,phi_offset:num_phi/2-phi_offset]
+        x =f_ALFbuf['q%d'%(qidx)][kk].value[:,phi_offset:num_phi/2-phi_offset]
         cluster_aves.append(x.mean(0))
         del x
         
@@ -150,7 +154,7 @@ for qidx in q_inds:
     cutoff = norm_ALFbuf_cluster_ave.shape[0]
 
     # cluster and sort
-    n_cluster=20
+    n_cluster=args.n_cluster
     kmeans = KMeans(n_clusters=n_cluster)
     X = np.concatenate((norm_ALFbuf_cluster_ave,norm_ALFpro_cluster_ave))
     norm_labels=kmeans.fit_predict(X)
@@ -161,10 +165,21 @@ for qidx in q_inds:
     # go through the clusters, gather all the proteins and all the buffers, pair them
     km_cluster_norm_diff_cor=[]
     cluster_shot_nums=[]
+    pro_clusters_not_used = []
     for ll in np.unique(norm_labels):
         inds=np.where(norm_labels==ll)[0]
         if np.sum(inds>=cutoff)==0 or np.sum(inds<cutoff)==0:
+            if np.sum(inds>=cutoff)>0 and np.sum(inds<cutoff)==0:
+                #then some of the protein shots are not used
+                #let's remember what clusters they are
+                pro_inds=inds[inds>=cutoff]-cutoff
+                print pro_inds
+                keypro = np.array(ALFpro_difcor_keys)[pro_inds]
+                print keypro
+                pro_clusters_not_used.append(keypro )
+
             continue
+        
         pro_inds=inds[inds>=cutoff]-cutoff
         buf_inds=inds[inds<cutoff]
         
@@ -197,5 +212,9 @@ for qidx in q_inds:
     km_cluster_norm_diff_cor=np.concatenate(km_cluster_norm_diff_cor)
     f_out.create_dataset('q%d/cluster_shot_nums'%qidx, data=np.array(cluster_shot_nums))
     f_out.create_dataset('q%d/diff_cor'%qidx, data = km_cluster_norm_diff_cor)
+    if len(pro_clusters_not_used)>0:
+        pro_clusters_not_used = np.concatenate(pro_clusters_not_used).astype(str)
+        f_out.create_dataset('q%d/pro_clusters_not_used'%qidx, 
+            data = pro_clusters_not_used)
 
 f_out.close()
