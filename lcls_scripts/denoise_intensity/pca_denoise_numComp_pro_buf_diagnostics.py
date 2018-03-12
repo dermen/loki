@@ -100,7 +100,20 @@ else:
     sample = sample_type(args.samp_type)
 # import run file
 
+
+
+
 data_dir = args.data_dir
+
+
+if sample in ['ALF_pro','GDP_pro']:
+    if sample.startswith('ALF'):
+        f_buf = h5py.File(os.path.join(data_dir,'run48.tbl'))
+    else:
+        f_buf = h5py.File(os.path.join(data_dir,'run13.tbl'))
+else:
+    print('need protein sample')
+    sys.exit()
 save_dir = args.out_dir
 
 if args.num_pca is None:
@@ -135,7 +148,7 @@ else:
 
 
 PI = f['polar_imgs']
-shot_tags = np.arange(0,PI.shape[0])
+PI_buf = f_buf['polar_imgs']
 
 # figure which qs are used for pairing
 qmin = args.qmin
@@ -156,6 +169,14 @@ for qidx in qcluster_inds:
     if q_group not in f_out.keys():
         f_out.create_group(q_group)
     shots=PI[:,qidx,:][:,None,:]
+    num_pro_shots = shots.shape[0]
+    buf_shots = PI_buf[:,qidx,:][:,None,:]
+    
+    #combine buffer and pro shots 
+    shots = np.concatenate([shots,buf_shots])
+    print('num of protein shots: %d'%num_pro_shots)
+    print ('num of buffer shots: %d'%(shots.shape[0]-num_pro_shots))
+
     this_mask = mask[qidx][None,:]
     print('normaling shots...')
     norm_shots = np.zeros_like(shots)
@@ -164,7 +185,7 @@ for qidx in qcluster_inds:
     # do we want to normalize by the entire range of intensity?
     # divide into Train and test
     num_shots = norm_shots.shape[0]
-    cutoff = int(num_shots*0.1) # use 10% of the shots as testing set
+    cutoff = int(num_pro_shots*0.1) # use 10% of the protein shots as testing set
     partial_mask = this_mask.copy()
     Train = norm_shots[cutoff:, partial_mask==1]
     Test = norm_shots[:cutoff, partial_mask==1]
@@ -191,6 +212,12 @@ for qidx in qcluster_inds:
         new_Test = pca.transform(Test)
         if 'explained_variance_ratio' not in f_out[q_group].keys():
             f_out.create_dataset('q%d/explained_variance_ratio'%qidx,data=pca.explained_variance_ratio_)
+            f_out.create_dataset('q%d/new_train_pro'%qidx, 
+                data = new_Train[:(num_pro_shots-cutoff),:])
+            f_out.create_dataset('q%d/new_train_buf'%qidx,
+            data = new_Train[(num_pro_shots-cutoff):])
+            f_out.create_dataset('q%d/new_test_pro'%qidx, 
+                data = new_Test)
 
         # get back the masked images and components
         components=pca.components_
@@ -203,6 +230,14 @@ for qidx in qcluster_inds:
 
         _m = Test.astype(np.float64).mean(0)
         new_Test = (Test.astype(np.float64)-_m).dot(components.T)
+
+        if 'new_test_pro' not in f_out[q_group].keys():
+            f_out.create_dataset('q%d/new_train_pro'%qidx, 
+                data = new_Train[:(num_pro_shots-cutoff),:])
+            f_out.create_dataset('q%d/new_train_buf'%qidx,
+            data = new_Train[(num_pro_shots-cutoff):])
+            f_out.create_dataset('q%d/new_test_pro'%qidx, 
+                data = new_Test)
     # get back the masked images and components
        
     masked_mean_train =reshape_unmasked_values_to_shots(Train,partial_mask).mean(0)
@@ -227,34 +262,50 @@ for qidx in qcluster_inds:
             denoise_Train= reshape_unmasked_values_to_shots(Train-Train_noise-Train.mean(0)[None,:]
                                                         , partial_mask)
 
-            
-            dc=DiffCorr(denoise_Train,qvalues,0,pre_dif=False)
-            Train_difcor= (dc.autocorr()/mask_cor).mean(0)
+            denoise_Train_pro = denoise_Train[:(num_pro_shots-cutoff)]
+            denoise_Train_buf = denoise_Train[(num_pro_shots-cutoff):]
+
+            print('num of protein shots: %d'%denoise_Train_pro.shape[0])
+            print ('num of buffer shots: %d'%(denoise_Train_buf.shape[0]))
+
+            dc=DiffCorr(denoise_Train_pro,qvalues,0,pre_dif=False)
+            Train_pro_difcor= (dc.autocorr()/mask_cor).mean(0)
+
+            dc=DiffCorr(denoise_Train_buf,qvalues,0,pre_dif=False)
+            Train_buf_difcor= (dc.autocorr()/mask_cor).mean(0)
 
             dc=DiffCorr(denoise_Test,qvalues,0,pre_dif=False)
             Test_difcor= (dc.autocorr()/mask_cor).mean(0)
 
 
-            f_out.create_dataset('q%d/pca%d/test_difcor'%(qidx,nn)
+            f_out.create_dataset('q%d/pca%d/test_pro_difcor'%(qidx,nn)
                 ,data=Test_difcor)
-            f_out.create_dataset('q%d/pca%d/train_difcor'%(qidx,nn)
-                ,data=Train_difcor)
+            f_out.create_dataset('q%d/pca%d/train_pro_difcor'%(qidx,nn)
+                ,data=Train_pro_difcor)
+            f_out.create_dataset('q%d/pca%d/train_buf_difcor'%(qidx,nn)
+                ,data=Train_buf_difcor)
     
         else:
             print('not doing denoising, just computing baseline')
 
-            dc=DiffCorr(norm_shots[cutoff:],qvalues,0,pre_dif=False)
+            dc=DiffCorr(norm_shots[cutoff:num_pro_shots],qvalues,0,pre_dif=False)
             difcor= (dc.autocorr()/mask_cor).mean(0)
-            f_out.create_dataset('q%d/pca%d/train_difcor'%(qidx,nn)
+            f_out.create_dataset('q%d/pca%d/train_pro_difcor'%(qidx,nn)
+            ,data=difcor)
+            
+            dc=DiffCorr(norm_shots[num_pro_shots:],qvalues,0,pre_dif=False)
+            difcor= (dc.autocorr()/mask_cor).mean(0)
+            f_out.create_dataset('q%d/pca%d/train_buf_difcor'%(qidx,nn)
             ,data=difcor)
             
             dc=DiffCorr(norm_shots[:cutoff],qvalues,0,pre_dif=False)
             difcor= (dc.autocorr()/mask_cor).mean(0)
-            f_out.create_dataset('q%d/pca%d/test_difcor'%(qidx,nn)
+            f_out.create_dataset('q%d/pca%d/test_pro_difcor'%(qidx,nn)
                 ,data=difcor)
     
-    if 'num_shots' not in f_out[q_group].keys():        
-        f_out.create_dataset('q%d/num_shots'%qidx, data=norm_shots.shape[0])
+    if 'num_pro_shots' not in f_out[q_group].keys():        
+        f_out.create_dataset('q%d/num_pro_shots'%qidx, data=num_pro_shots)
+        f_out.create_dataset('q%d/num_buf_shots'%qidx, data=norm_shots.shape[0]-num_pro_shots)
     del shots
     del norm_shots
 

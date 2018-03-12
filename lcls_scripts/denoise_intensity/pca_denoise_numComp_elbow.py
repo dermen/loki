@@ -46,11 +46,6 @@ parser.add_argument('-d','--data_dir', type=str, default = '/reg/d/psdm/cxi/cxil
 
 
 
-parser.add_argument('-p','--num_pca', type=int, default=None,
-                   help='num_pca+1 is the max number of pca components to subtract')
-
-
-
 
 def sample_type(x):
     return {-1:'AgB_sml',
@@ -103,16 +98,14 @@ else:
 data_dir = args.data_dir
 save_dir = args.out_dir
 
-if args.num_pca is None:
-    num_pca_file = os.path.join(save_dir,'num_pca_components.txt')
-
-    if not os.path.exists(num_pca_file):
-        print("there is no num_pca_components.txt file in %s"%save_dir)
-        sys.exit()
-    num_pca_components = np.loadtxt(num_pca_file)
-
-
 save_dir = os.path.join( args.out_dir, sample)
+
+num_pca_file = os.path.join(save_dir,'num_pca_components.txt')
+
+if not os.path.exists(num_pca_file):
+    print("there is no num_pca_components.txt file in %s"%save_dir)
+    sys.exit()
+num_pca_components = np.loadtxt(num_pca_file)
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
@@ -175,14 +168,15 @@ for qidx in qcluster_inds:
     qvalues = np.linspace(0,1,partial_mask.shape[0])
     mask_dc = DiffCorr(partial_mask,qvalues,0, pre_dif=True)
     mask_cor = mask_dc.autocorr()
-    if args.num_pca is None:
-        num_pca = int(num_pca_components[qidx])
-        max_pca = num_pca+5
-    else:
-        num_pca = args.num_pca+1
-        max_pca = args.num_pca+1
 
-    print('denoisng with PCA critical num_pca_components = %d...'%num_pca)
+    max_pca_components=[]
+
+    max_pca_components.append(int(num_pca_components[qidx]))
+    if 'num_pca_cutoff' in f_out[q_group].keys():
+        max_pca_components.append(f_out[q_group]['num_pca_cutoff'].value)
+    max_pca_components = list(set(max_pca_components))
+     
+
     if 'pca_components' not in f_out[q_group].keys():
         # if there is no pca component saved, then run it and save the components
         pca=PCA(n_components=50, whiten = False)
@@ -209,12 +203,14 @@ for qidx in qcluster_inds:
     masked_mean_test =reshape_unmasked_values_to_shots(Test,partial_mask).mean(0)
 
     # denoise
-    for nn in range(max_pca):
+    for nn in max_pca_components:
         pca_group = 'q%d/pca%d'%(qidx,nn)
+        
         if 'pca%d'%nn not in f_out[q_group].keys():
             f_out.create_group(pca_group)
-        else:
-            print("pca denoise at pca n_components = %d is already done. Skip!"%nn)
+
+        if 'all_test_difcors' in f_out[q_group]['pca%d'%nn].keys():
+            print('already has all difcors for pca%d'%nn)
             continue
 
         if nn>0:
@@ -229,29 +225,29 @@ for qidx in qcluster_inds:
 
             
             dc=DiffCorr(denoise_Train,qvalues,0,pre_dif=False)
-            Train_difcor= (dc.autocorr()/mask_cor).mean(0)
+            Train_difcor= dc.autocorr()/mask_cor
 
             dc=DiffCorr(denoise_Test,qvalues,0,pre_dif=False)
-            Test_difcor= (dc.autocorr()/mask_cor).mean(0)
+            Test_difcor= dc.autocorr()/mask_cor
 
 
-            f_out.create_dataset('q%d/pca%d/test_difcor'%(qidx,nn)
-                ,data=Test_difcor)
-            f_out.create_dataset('q%d/pca%d/train_difcor'%(qidx,nn)
-                ,data=Train_difcor)
+            f_out.create_dataset('q%d/pca%d/all_test_difcors'%(qidx,nn)
+                ,data=Test_difcor.astype(np.float32))
+            f_out.create_dataset('q%d/pca%d/all_train_difcors'%(qidx,nn)
+                ,data=Train_difcor.astype(np.float32))
     
         else:
             print('not doing denoising, just computing baseline')
 
             dc=DiffCorr(norm_shots[cutoff:],qvalues,0,pre_dif=False)
-            difcor= (dc.autocorr()/mask_cor).mean(0)
-            f_out.create_dataset('q%d/pca%d/train_difcor'%(qidx,nn)
-            ,data=difcor)
+            difcor= dc.autocorr()/mask_cor
+            f_out.create_dataset('q%d/pca%d/all_train_difcors'%(qidx,nn)
+            ,data=difcor.astype(np.float32))
             
             dc=DiffCorr(norm_shots[:cutoff],qvalues,0,pre_dif=False)
-            difcor= (dc.autocorr()/mask_cor).mean(0)
-            f_out.create_dataset('q%d/pca%d/test_difcor'%(qidx,nn)
-                ,data=difcor)
+            difcor= dc.autocorr()/mask_cor
+            f_out.create_dataset('q%d/pca%d/all_test_difcors'%(qidx,nn)
+                ,data=difcor.astype(np.float32))
     
     if 'num_shots' not in f_out[q_group].keys():        
         f_out.create_dataset('q%d/num_shots'%qidx, data=norm_shots.shape[0])
