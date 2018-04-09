@@ -41,8 +41,10 @@ parser.add_argument('-u','--qmax', type=int, default=None,
 parser.add_argument('-o','--out_dir', type=str,required=True,
                    help='output dir to save in, overwrites the sample type dir')
 
-parser.add_argument('-d','--data_dir', type=str, default = '/reg/d/psdm/cxi/cxilp6715/results/combined_tables/finer_q',
+parser.add_argument('-d','--data_dir', type=str, default = '/reg/d/psdm/cxi/cxilp6715/scratch/combined_tables/finer_q',
                    help='where to look for the polar data')
+
+
 
 parser.add_argument('-p','--num_pca', type=int, default=None,
                    help='num_pca+1 is the max number of pca components to subtract')
@@ -129,7 +131,7 @@ f_out = h5py.File(os.path.join(save_dir, out_file),'a')
 if 'polar_mask_binned' in f.keys():
     mask = np.array(f['polar_mask_binned'].value==f['polar_mask_binned'].value.max(), dtype = int)
 else:
-    mask = np.load('/reg/d/psdm/cxi/cxilp6715/results/shared_files/binned_pmask_basic.npy')
+    mask = np.load('/reg/d/psdm/cxi/cxilp6715/scratch/water_data/binned_pmask_basic.npy')
 
 
 PI = f['polar_imgs']
@@ -155,6 +157,10 @@ for qidx in qcluster_inds:
         f_out.create_group(q_group)
     shots=PI[:,qidx,:][:,None,:]
     this_mask = mask[qidx][None,:]
+
+    f_out.create_dataset('q%d/mask'%qidx, data=this_mask)
+    f_out.create_dataset('q%d/shots'%qidx, data=shots)
+
     print('normaling shots...')
     norm_shots = np.zeros_like(shots)
     for idx,ss in enumerate(shots):
@@ -169,10 +175,10 @@ for qidx in qcluster_inds:
 
     print ("%d test shots"%(Test.shape[0]))
     print ("%d train shots"%(Train.shape[0]))
-   
 
     qvalues = np.linspace(0,1,partial_mask.shape[0])
-    
+    mask_dc = DiffCorr(partial_mask,qvalues,0, pre_dif=True)
+    mask_cor = mask_dc.autocorr()
     if args.num_pca is None:
         num_pca = int(num_pca_components[qidx])
         max_pca = num_pca+5
@@ -202,7 +208,7 @@ for qidx in qcluster_inds:
         _m = Test.astype(np.float64).mean(0)
         new_Test = (Test.astype(np.float64)-_m).dot(components.T)
     # get back the masked images and components
- 
+       
     masked_mean_train =reshape_unmasked_values_to_shots(Train,partial_mask).mean(0)
     masked_mean_test =reshape_unmasked_values_to_shots(Test,partial_mask).mean(0)
 
@@ -224,32 +230,21 @@ for qidx in qcluster_inds:
             Train_noise = new_Train[:,:nn].dot(components[:nn])
             denoise_Train= reshape_unmasked_values_to_shots(Train-Train_noise-Train.mean(0)[None,:]
                                                         , partial_mask)
-
-            
-            dc=DiffCorr(denoise_Train,qvalues,0,pre_dif=False)
-            Train_difcor= (dc.autocorr()).mean(0)
-
-            dc=DiffCorr(denoise_Test,qvalues,0,pre_dif=False)
-            Test_difcor= (dc.autocorr()).mean(0)
-
-
-            f_out.create_dataset('q%d/pca%d/test_difcor'%(qidx,nn)
-                ,data=Test_difcor)
-            f_out.create_dataset('q%d/pca%d/train_difcor'%(qidx,nn)
-                ,data=Train_difcor)
+            print('dtype: ')
+            print Train_noise.dtype
+            print('average intensity: %g'%(denoise_Train.mean(-1).mean()))
+            f_out.create_dataset('q%d/pca%d/test_denoise_shots'%(qidx,nn)
+                ,data=denoise_Test,dtype='float64')
+            f_out.create_dataset('q%d/pca%d/train_denoise_shots'%(qidx,nn)
+                ,data=denoise_Train,dtype='float64')
     
         else:
             print('not doing denoising, just computing baseline')
 
-            dc=DiffCorr(norm_shots[cutoff:],qvalues,0,pre_dif=False)
-            difcor= (dc.autocorr()).mean(0)
-            f_out.create_dataset('q%d/pca%d/train_difcor'%(qidx,nn)
-            ,data=difcor)
-            
-            dc=DiffCorr(norm_shots[:cutoff],qvalues,0,pre_dif=False)
-            difcor= (dc.autocorr()).mean(0)
-            f_out.create_dataset('q%d/pca%d/test_difcor'%(qidx,nn)
-                ,data=difcor)
+            f_out.create_dataset('q%d/pca%d/test_denoise_shots'%(qidx,nn)
+                ,data=norm_shots[:cutoff],dtype='float64')
+            f_out.create_dataset('q%d/pca%d/train_denoise_shots'%(qidx,nn)
+                ,data=norm_shots[cutoff:],dtype='float64')
     
     if 'num_shots' not in f_out[q_group].keys():        
         f_out.create_dataset('q%d/num_shots'%qidx, data=norm_shots.shape[0])

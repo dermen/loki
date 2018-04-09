@@ -47,9 +47,6 @@ parser.add_argument('-rmax', '--interp_rmax', type=int, required=True, help='max
 parser.add_argument('-rmin', '--interp_rmin', type=int, default=100, help='minimum rmin in pixels to interpolate')
 parser.add_argument('-d', '--out_dir', type=str,default ='/reg/d/psdm/cxi/cxilp6715/scratch/polar_data',
 help='dir in which to store the polar data output')
-parser.add_argument('-mf', '--mask_file', type=str,
-    default ='/reg/d/psdm/cxi/cxilp6715/results/shared_files/mask_rough4.npy',
-    help=".npy file containing mask for the polar data")
 
 
 
@@ -66,9 +63,14 @@ img_sh = (1734, 1731)
 
 # point where forward beam intersects detector
 cent_fname = '/reg/d/psdm/cxi/cxilp6715/results/shared_files/center.npy'
-mask_fname = args.mask_file
+mask_fname = '/reg/d/psdm/cxi/cxilp6715/results/masks_files/run%d_masks.h5'%run
+if not os.path.isfile(mask_fname):
+    print('mask file does not exist for run %d'%run)
+    sys.exit()
+    
 cent = np.load( cent_fname)
-mask = np.load( mask_fname) 
+f_mask= h5py.File(mask_fname,'r')
+mask = f_mask['mask'].value
 
 #~~~~~ WAXS parameters
 # minimium and maximum radii for calculating radial profile
@@ -128,7 +130,6 @@ pmask_bn = bin_ndarray( pmask, binned_pol_img_sh)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 #~~~ data get parameters
 #load the data events for the given run
 ds_str = 'exp=cxilp6715:run=%d:smd' % run
