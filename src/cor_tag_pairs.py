@@ -73,7 +73,7 @@ class CorTagPairs:
 
         """
        
-        print "Making difference angular profiles..." 
+        print( "Making difference angular profiles..." )
         if fixed_q:
             print  ("Will use a fixed q..." )
             assert (iq is not None)

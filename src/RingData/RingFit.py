@@ -283,8 +283,8 @@ class RingFit:
         for center in self.possible_centers:
             self.RadPro.update_center( center)
             radial_profile = self.RadPro.calculate(self.img) 
-            ring_profile = radial_profile[ self.ring_scan_start:\
-                                            self.ring_scan_stop]
+            ring_profile = radial_profile[ int(self.ring_scan_start):\
+                                            int(self.ring_scan_stop)]
             self.possible_ring_profiles.append( ring_profile)
     
     def _store_maxima_of_each_profile(self):
