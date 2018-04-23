@@ -120,8 +120,8 @@ class MakeDatabase:
         """ iterate over all shots in self.rings """
         for shot_ind, shot_tag in enumerate(self.tags):
 
-            print "%sParameterizing exposure ( %d/%d )" % (log_ret,
-                                                            shot_ind + 1, self.nshots)
+            print ( "%sParameterizing exposure ( %d/%d )" % (log_ret,
+                                                            shot_ind + 1, self.nshots) )
             self.shot_rings = self.rings[shot_tag].value
             self.ring = self.shot_rings[self.pk_pos]
 

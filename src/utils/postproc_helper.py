@@ -17,7 +17,7 @@ import numpy.ma as ma
 
 def _find_min_pairs(eps, eps_order):
     """parigin hack"""
-    print "----Pairing..."
+    print ("----Pairing...")
     pair_inds = []
     used_inds = []
     dists = []
@@ -40,7 +40,7 @@ def _find_min_pairs(eps, eps_order):
 
 def pair_fits(fits):
     """fits is a array/list of chebyshev fits"""
-    print "----Performing distance calc..."
+    print ("----Performing distance calc...")
     eps = distance.cdist(fits, fits)
 
     #  Add the max to the diagonal, otherwise the diagonal will
