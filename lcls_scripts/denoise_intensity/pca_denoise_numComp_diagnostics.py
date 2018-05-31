@@ -47,6 +47,9 @@ parser.add_argument('-d','--data_dir', type=str, default = '/reg/d/psdm/cxi/cxil
 parser.add_argument('-p','--num_pca', type=int, default=None,
                    help='num_pca+1 is the max number of pca components to subtract')
 
+parser.add_argument('-s','--save', type=bool, default=False,
+                   help='if True, save all the dif cors for the num_pca needed')
+
 
 
 
@@ -129,11 +132,19 @@ f_out = h5py.File(os.path.join(save_dir, out_file),'a')
 if 'polar_mask_binned' in f.keys():
     mask = np.array(f['polar_mask_binned'].value==f['polar_mask_binned'].value.max(), dtype = int)
 else:
-    mask = np.load('/reg/d/psdm/cxi/cxilp6715/results/shared_files/binned_pmask_basic.npy')
+    print("there is no mask stored with the shots")
+    sys.exit()
+    # mask = np.load('/reg/d/psdm/cxi/cxilp6715/results/shared_files/binned_pmask_basic.npy')
 
 
 PI = f['polar_imgs']
-shot_tags = np.arange(0,PI.shape[0])
+# filter by photon energy. If the photon energy of the shot if not within 100 EV of the average, do not use
+photon_energy=np.nan_to_num(f['ebeam']['photon_energy'].value)
+mean_E=photon_energy.mean()
+E_sigma=100.
+shot_tage_to_keep=np.where( (photon_energy> (mean_E-E_sigma))\
+    +(photon_energy< (mean_E-E_sigma)) )[0]
+print('Num of shots to be used: %d'%(shot_tage_to_keep.size))
 
 # figure which qs are used for pairing
 qmin = args.qmin
@@ -153,7 +164,7 @@ for qidx in qcluster_inds:
     q_group = 'q%d'%qidx
     if q_group not in f_out.keys():
         f_out.create_group(q_group)
-    shots=PI[:,qidx,:][:,None,:]
+    shots=PI[:,qidx,:][shot_tage_to_keep,None,:]
     this_mask = mask[qidx][None,:]
     print('normaling shots...')
     norm_shots = np.zeros_like(shots)
@@ -205,6 +216,39 @@ for qidx in qcluster_inds:
  
     masked_mean_train =reshape_unmasked_values_to_shots(Train,partial_mask).mean(0)
     masked_mean_test =reshape_unmasked_values_to_shots(Test,partial_mask).mean(0)
+    
+    #### this is just for saving to get error bars
+    if args.save:
+        grp=f_out['q%d'%qidx]
+        nn=grp['num_pca_cutoff'].value
+        if 'all_test_difcors' in grp['pca%d'%nn].keys():
+            print('already save dif cors for this cutoff (%d) at q%d'%(nn,qidx))
+        else:
+
+            Test_noise = new_Test[:,:nn].dot(components[:nn])
+            denoise_Test = reshape_unmasked_values_to_shots(Test-Test_noise-Test.mean(0)[None,:],
+            partial_mask)
+            Train_noise = new_Train[:,:nn].dot(components[:nn])
+            denoise_Train= reshape_unmasked_values_to_shots(Train-Train_noise-Train.mean(0)[None,:]
+                                                        , partial_mask)
+
+            dc=DiffCorr(denoise_Train,qvalues,0,pre_dif=False)
+            Train_difcor= dc.autocorr()
+
+            dc=DiffCorr(denoise_Test,qvalues,0,pre_dif=False)
+            Test_difcor= dc.autocorr()
+
+
+            f_out.create_dataset('q%d/pca%d/all_test_difcors'%(qidx,nn)
+                ,data=Test_difcor)
+            f_out.create_dataset('q%d/pca%d/all_train_difcors'%(qidx,nn)
+                ,data=Train_difcor)
+
+        del shots
+        del norm_shots
+
+        continue
+    
 
     # denoise
     for nn in range(max_pca):

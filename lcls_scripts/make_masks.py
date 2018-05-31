@@ -2,7 +2,8 @@ from psana import *
 import numpy as np
 import h5py
 import sys
-import scipy
+import scipy.ndimage
+import os
 
 run_begin = int(sys.argv[1])
 run_end = int(sys.argv[2])
@@ -23,7 +24,10 @@ def get_imgs(evets):
     return imgs
 
 for run in runnums:
-
+    out_fname='/reg/d/psdm/cxi/cxilp6715/results/masks_files/run%d_masks.h5'%run
+    if os.path.isfile(out_fname):
+        print ('mask already exist for run %d'%run)
+        continue
     # make mask for this run
     ds_str = 'exp=cxilp6715:run=%d:smd' % run
     try:
@@ -47,7 +51,7 @@ for run in runnums:
     negative_pixel_mask=im>0
     negative_pixel_mask = ~(scipy.ndimage.morphology.binary_dilation(~negative_pixel_mask, iterations=1) )
 
-    with h5py.File('/reg/d/psdm/cxi/cxilp6715/results/masks_files/run%d_masks.h5'%run,'w') as f_out:
+    with h5py.File(out_fname,'w') as f_out:
         f_out.create_dataset('negative_pixel_mask',data=negative_pixel_mask)
         f_out.create_dataset('psana_mask', data=det_mask)
         f_out.create_dataset('mask',data=det_mask*negative_pixel_mask)
