@@ -2,7 +2,6 @@ import h5py
 import numpy as np
 from scipy.ndimage import zoom
 import numpy.ma as ma
-from itertools import izip
 
 
 
@@ -72,15 +71,15 @@ class InterpSimple:
             self.weighted = False
             grp = qf['nearest']
         self._inds =  [ grp['inds'][r].value   
-            for r in map( str,np.arange(self.qRmin,self.qRmax))]
+            for r in list(map( str,np.arange(self.qRmin,self.qRmax)))]
         self._dists =  [ grp['dists'][r].value   
-            for r in map( str,np.arange(self.qRmin,self.qRmax))]
+            for r in list(map( str,np.arange(self.qRmin,self.qRmax)))]
 
     def nearest_query(self, data_img, dtype=np.float32, weighted=True):
         data = data_img.ravel()
         if self.weighted:
             rings = np.array( [ np.average(data[i], axis=1, weights=d/d.sum(1)[:,None]) 
-                for i,d in izip(self._inds, self._dists) ] )
+                for i,d in zip(self._inds, self._dists) ] )
         else:
             rings = np.array( [ data[i] for i in self._inds ] )
         return rings

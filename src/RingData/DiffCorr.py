@@ -3,7 +3,7 @@ import numpy as np
 import scipy.interpolate as interp
 
 class DiffCorr:
-    def __init__( self, shots, q_values, k
+    def __init__( self, shots, q_values=None, k=None
         ,delta_shot=None,pre_dif=True
         ,generate_mode=False ):
         '''
@@ -41,9 +41,13 @@ class DiffCorr:
         self.phi_values = np.linspace(0., 2.*np.pi, self.num_phi)
         
         self.num_q = self.shotsAB.shape[-2]
-        assert (self.num_q == q_values.size)
-        self.q_values = q_values
-        self.k = k
+        if q_values is not None:
+            assert (self.num_q == q_values.size)
+            self.q_values = q_values
+            self.k = k
+        else:
+            self.q_values = None
+            self.k = None
 
 
     def correct_polarization(self, yaxis_polarization):
@@ -62,6 +66,8 @@ class DiffCorr:
         ..[2] Jackson. Classical Electrostatics.
         """
         
+        assert (self.k is not None)
+        assert (self.q_values is not None)
         if self.k == 0.0:
             raise ValueError('Rings.k is 0.0, which indicates simulated data --'
                              ' no polarization correction possible.')

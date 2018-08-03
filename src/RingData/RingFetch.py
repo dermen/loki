@@ -2,7 +2,6 @@ import h5py
 import numpy as np
 from scipy.ndimage import zoom
 from scipy import spatial
-from itertools import izip
 
 class RingFetch:
 
@@ -66,7 +65,7 @@ class RingFetch:
             assert(index_query_fname is not None)
             query_file = h5py.File(index_query_fname, 'r')
             self._max_radius_in_query_data = max(
-                map(int, query_file['nearest/dists'].keys()))
+                list(map(int, query_file['nearest/dists'].keys())))
             if self.method == 'nearest':
                 self._index_data = query_file['nearest']
             else:
@@ -320,8 +319,8 @@ class RingFetch:
 
     def _set_left_and_right_edge_indices(self):
         #if self._polar_ring_mask[0] == 0:
-        self._gap_index_pairs = zip(self._gap_start_indices,
-            np.roll(self._gap_end_indices, -1))
+        self._gap_index_pairs = list(zip(self._gap_start_indices,
+            np.roll(self._gap_end_indices, -1)) )
         #else:
         #    self._gap_index_pairs = zip(self._gap_start_indices,
         #                               self._gap_end_indices)
@@ -451,15 +450,15 @@ class InterpSimple:
             self.weighted = False
             grp = qf['nearest']
         self._inds =  [ grp['inds'][r].value   
-            for r in map( str,np.arange(self.qRmin,self.qRmax))]
+            for r in list(map( str,np.arange(self.qRmin,self.qRmax)))]
         self._dists =  [ grp['dists'][r].value   
-            for r in map( str,np.arange(self.qRmin,self.qRmax))]
+            for r in list(map( str,np.arange(self.qRmin,self.qRmax)))]
 
     def nearest_query(self, data_img, dtype=np.float32, weighted=True):
         data = data_img.ravel()
         if self.weighted:
             rings = np.array( [ np.average(data[i], axis=1, weights=d/d.sum(1)[:,None]) 
-                for i,d in izip(self._inds, self._dists) ] )
+                for i,d in zip(self._inds, self._dists) ] )
         else:
             rings = np.array( [ data[i] for i in self._inds ] )
         return rings
@@ -486,7 +485,7 @@ class PolarTree:
         R = np.round(R, 0)
         # I am unsure of the consequences, probable some rounding errors...
         PHI = np.arctan2(Y - b, X - a)
-        self._points = zip(R.ravel(), PHI.ravel())
+        self._points = list(zip(R.ravel(), PHI.ravel()))
 
     def _create_the_tree(self):
         print ("Making the K-D tree...")

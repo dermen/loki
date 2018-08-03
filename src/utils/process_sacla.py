@@ -26,7 +26,7 @@ def imagesFromTags(runfile, tagList):
 
 def get_detector_gain(runFile):
     f = h5py.File(runFile, 'r')
-    detgain = f[f.keys()[1] +
+    detgain = f[ list(f.keys())[1] +
                 '/detector_2d_assembled_1/detector_info' + '/absolute_gain']\
         .value
     return detgain
@@ -34,7 +34,7 @@ def get_detector_gain(runFile):
 
 def get_pixel_size(runFile):
     f = h5py.File(runFile, 'r')
-    pixsize = f[f.keys()[1] +
+    pixsize = f[ list(f.keys())[1] +
                 '/detector_2d_assembled_1/detector_info'
                 + '/pixel_size_in_micro_meter'].value[0] / 1e6
     return pixsize
@@ -78,7 +78,7 @@ def selectImagesSimple(runfile, shutter=1, beam=1,
 
     fh5 = h5py.File(runfile)
     run_key = [k for k in fh5.keys() if k.startswith('run_')][0]
-    tags = fh5['/%s/detector_2d_assembled_1' % run_key].keys()[1:]
+    tags = list(fh5['/%s/detector_2d_assembled_1' % run_key].keys())[1:]
     beam_stat = fh5['/%s/event_info/acc/accelerator_status' % run_key].value
 
     energy_stat = fh5[
@@ -119,7 +119,7 @@ def selectImages(runfile, probe=True, pump=False, beam=True):
     """
     fh5 = h5py.File(runfile)
     run_key = [k for k in fh5.keys() if k.startswith('run_')][0]
-    tags = fh5['/%s/detector_2d_assembled_1' % run_key].keys()[1:]
+    tags = list(fh5['/%s/detector_2d_assembled_1' % run_key].keys() )[1:]
 
     beam_path = '/%s/event_info/acc/accelerator_status' % run_key
     pump_path = '/%s/event_info/bl_3/lh_1/laser_pulse_selector_status' % run_key

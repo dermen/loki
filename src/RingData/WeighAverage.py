@@ -82,7 +82,7 @@ class WeighAverage:
             asyms[k]=asymmetry
             
             if asymmetry <= self.thresh:
-                print "Convergence in weighted averaging achieved after %d iterations"%k
+                print ("Convergence in weighted averaging achieved after %d iterations"%k)
                 asyms = asyms[:k+1]
                 break
 
@@ -96,7 +96,7 @@ class WeighAverage:
             self.weights=self.weights/np.sum(self.weights)
         
         if asyms[-1] > self.thresh:
-            print "WARNING: weighted averaging did NOT converage after %d iterations."%self.num_iter
+            print( "WARNING: weighted averaging did NOT converage after %d iterations."%self.num_iter)
         
         return self.weights, asyms 
 
@@ -112,7 +112,7 @@ class WeighAverage:
             try:
                 end_point = np.where(np.round(self.cpsi[0]+self.cpsi, 5) == 0 )[0][0]
             except IndexError:
-                print "ERORR!!! Cannot find match for minimum cos psi value %g"%np.min(self.cpsi)
+                print ("ERORR!!! Cannot find match for minimum cos psi value %g"%np.min(self.cpsi))
                 sys.exit()
                 
             # find where cpsi = zero or close to zero is
@@ -120,7 +120,7 @@ class WeighAverage:
             x = np.arange(0, mid_point+1, 1)
             y = np.arange( end_point,mid_point, -1)
 
-            self.mapping = np.array( zip(x,y) )
+            self.mapping = np.array( list( zip(x,y) ))
             
             # check that mapping has been done correctly
             assert ( ( np.round(self.cpsi[self.mapping[:,0]]+ self.cpsi[self.mapping[:,1]],5) == 0.0 ).all() )
@@ -144,7 +144,7 @@ class WeighAverage:
             assert ( len(ind) == len(match) )
         
             # mapping indices of cpsi for left to right-hand side of autocorr
-            self.mapping = np.array(zip(ind,match))
+            self.mapping = np.array( list( zip(ind,match)))
             
             #############################################################################
     

@@ -30,13 +30,13 @@ class CorTagPairs:
         self.dif_imgs = None
         self.dif_cors = None
         
-        print "\nLoading input files..."
+        print  ( "\nLoading input files..." )
         self._load_data_file()
         self._load_tagPairs_tagMap_and_database()
 
 
     def _load_data_file(self):
-        print "Loading polar data file %s"%self.data_fname
+        print ( "Loading polar data file %s"%self.data_fname )
         f = h5py.File(self.data_fname, 'r')
         self.pd = f['polar_data']
         self.nq = f['q_mapping'].shape[0]
@@ -44,12 +44,12 @@ class CorTagPairs:
         self.pmask= f['polar_mask'].value
 
     def _load_tagPairs_tagMap_and_database(self):
-        print "Loading tag pairing file %s"%self.tag_fname
+        print  ( "Loading tag pairing file %s"%self.tag_fname )
         self.tag_pairs = json.load(open(self.tag_fname, 'r'))
         self.npairs = len(self.tag_pairs)
-        print "Loading index mapping file %s"%self.map_fname
+        print ("Loading index mapping file %s"%self.map_fname )
         self.tag_map = json.load(open( self.map_fname, 'r'))
-        print "Loading database pickle %s"%self.db_fname
+        print ("Loading database pickle %s"%self.db_fname )
         self.df = pandas.read_pickle(self.db_fname)
 
     def make_dif_imgs(self, fixed_q, norm=True, del_q=2, iq=None,
@@ -73,19 +73,19 @@ class CorTagPairs:
 
         """
        
-        print "Making difference angular profiles..." 
+        print( "Making difference angular profiles..." )
         if fixed_q:
-            print "Will use a fixed q..."
+            print  ("Will use a fixed q..." )
             assert (iq is not None)
             overbounds1 = iq+del_q+1 >= self.nq 
             overbounds2 = iq-del_q < 0
             assert( not (overbounds1) and not (overbounds2) )
         else:
-            print "Will use pk_pos to estimate angular profile..." 
+            print  ("Will use pk_pos to estimate angular profile...") 
         self.dif_imgs = np.zeros( (self.npairs, self.nphi, 2 ) )
         overflow_inds = []
         for i,tags in enumerate(self.tag_pairs):
-            print '%sMaking differencing pair %d/%d'%(log_ret,i,self.npairs)
+            print ('%sMaking differencing pair %d/%d'%(log_ret,i,self.npairs) )
             
             t1,t2 = tags
             i1,i2 = self.tag_map[t1], self.tag_map[t2]
@@ -153,21 +153,21 @@ class CorTagPairs:
     def make_dif_imgs2D(self, fixed_q, norm=True, del_q=2, iq=None,
                 rm_spots=True, spot_thick=None, spot_thresh=2.5):
         print("TESTING...")
-        print "Making difference angular profiles..." 
+        print  ("Making difference angular profiles..." )
         if fixed_q:
-            print "Will use a fixed q..."
+            print ("Will use a fixed q...")
             assert (iq is not None)
             overbounds1 = iq+del_q+1 >= self.nq 
             overbounds2 = iq-del_q < 0
             assert( not (overbounds1) and not (overbounds2) )
         else:
-            print "Will use pk_pos to estimate angular profile..." 
+            print ("Will use pk_pos to estimate angular profile..." )
 
         n = len( np.arange( -del_q, del_q+1))
         self.dif_imgs = np.zeros( (self.npairs, n, self.nphi, 2 ) )
         overflow_inds = []
         for i,tags in enumerate(self.tag_pairs):
-            print '%sMaking differencing pair %d/%d'%(log_ret,i,self.npairs)
+            print ('%sMaking differencing pair %d/%d'%(log_ret,i,self.npairs) )
             
             t1,t2 = tags
             i1,i2 = self.tag_map[t1], self.tag_map[t2]
@@ -235,7 +235,7 @@ class CorTagPairs:
 
     def make_dif_cors(self):
         """ makes difference correlations using RingData.DiffCorr"""
-        print "Making difference correlations..."
+        print ("Making difference correlations...")
         assert( self.dif_imgs is not None)
         differences = self.dif_imgs[:,:,0] - self.dif_imgs[:,:,1]
         DC = RingData.DiffCorr(differences, pre_dif=True)
@@ -243,7 +243,7 @@ class CorTagPairs:
     
     def make_dif_cors2D(self):
         """ makes difference correlations using RingData.DiffCorr"""
-        print "Making difference correlations..."
+        print ("Making difference correlations...")
         assert( self.dif_imgs is not None)
         differences = self.dif_imgs[:,:,:,0] - self.dif_imgs[:,:,:,1]
         DC = RingData.DiffCorr(differences, pre_dif=True)
@@ -253,7 +253,7 @@ class CorTagPairs:
         """
         outfilename - hdf5 output file name
         """
-        print "Saving output to %s"%outfilename
+        print ("Saving output to %s"%outfilename)
         assert( self.dif_cors is not None)
         outf = h5py.File( outfilename, 'w')
         outf.create_dataset('dif_imgs', data=self.dif_imgs)

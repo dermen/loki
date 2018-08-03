@@ -5,7 +5,6 @@ import numpy as np
 from scipy.spatial import distance
 
 from loki.utils import postproc_helper as helper
-from loki.utils import stable
 
 
 class MakeTagPairs:
@@ -176,6 +175,8 @@ class MakeTagPairs:
 
 #       use the stable roommate (Irving's) algorithm to pair the shots
         print("  Forming the pairings using Irving's algorthm...")
+        print("BROKN EXItING , NO PAIRING FOR NOW.... ")
+        sys.exit()
         pairs_dict = stable.stableroomate(prefs=pref_dict)
 
         pairs = self._remove_duplicate_pairs(pairs_dict)
