@@ -186,15 +186,15 @@ for qidx in qcluster_inds:
     
     if args.num_pca is None:
         num_pca = int(num_pca_components[qidx])
-        max_pca = num_pca+5
+        max_pca_limit = num_pca+5
     else:
         num_pca = args.num_pca+1
-        max_pca = args.num_pca+1
+        max_pca_limit = args.num_pca+1
 
     print('denoisng with PCA critical num_pca_components = %d...'%num_pca)
     if 'pca_components' not in f_out[q_group].keys():
         # if there is no pca component saved, then run it and save the components
-        pca=PCA(n_components=50, whiten = False)
+        pca=PCA(n_components=np.min((20,Train.shape[-1]-2)), whiten = False)
 
         new_Train=pca.fit_transform(Train)
         new_Test = pca.transform(Test)
@@ -251,6 +251,7 @@ for qidx in qcluster_inds:
     
 
     # denoise
+    max_pca=np.min((max_pca_limit,pca.n_components_))
     for nn in range(max_pca):
         pca_group = 'q%d/pca%d'%(qidx,nn)
         if 'pca%d'%nn not in f_out[q_group].keys():
